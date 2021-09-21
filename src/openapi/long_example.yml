@@ -1,0 +1,154 @@
+openapi: 3.1.0
+info:
+  title: Example OpenAPI definition
+paths:
+  /widgets:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+              schema:
+                # Use the `POST` version of the `Widget` type. See below.
+                $interface: "Widget#Post"
+      responses:
+        201:
+          content:
+            application/json:
+              schema:
+                # Use the `GET` version of the `Widget` type. See below.
+                $interface: "Widget"
+  /widgets/{id}:
+    patch:
+      parameters:
+        - name: dataset_id
+          in: path
+          description: The UUID of a dataset
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json+merge-patch:
+            schema:
+                # Use the `PATCH` version of the `Widget` type. See below.
+              $interface: "Widget#MergePatch"
+        required: true
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $interface: "Widget"
+        404:
+          description: The requested ID was not found
+          content: {}
+components:
+  # We can declare normal OpenAPI / JSON Schema schemas as always.
+  schemas:
+    ResourceStatus:
+      type: string
+      description: The current state of this resource.
+      example: new
+      enum:
+        - new
+        - updating
+        - ready
+        - error
+  # This is a non-standard section that we add to OpenAPI. It contains
+  # interfaces that behave a bit more like programming language types (and less
+  # like a validation language). Each of these types potentially exists in
+  # several versions:
+  #
+  # - MyType: The base type. Returned by the server.
+  # - MyType#Post: Use to create new instances of MyType using POST.
+  # - MyType#Put: Overwrite an instance of MyType using PUT.
+  # - MyType#MergePatch: Update an instance of MyType using PATCH with
+  #   application/json+merge-patch.
+  #
+  # These types will be compiled to `components.schema.MyType`,
+  # `components.schema.MyTypePost`, etc.
+  interfaces:
+    # Shared fields used by all resources. None of these may be passed to POST,
+    # PUT or PATCH, because they're not `mutable` or `initializable`.
+    Resource:
+      emit: false
+      members:
+        id:
+          # We specify `required` directly on the member, and not (like JSON
+          # Schema) in an external list. This makes it vastly easier to use
+          # `$merge` to combine multiple interfaces.
+          required: true
+          # We then use a perfectly normal JSON schema to define the type.
+          schema:
+            type: string
+            format: uuid
+        created_at:
+          required: true
+          schema:
+            type: string
+            format: date-time
+        updated_at:
+          required: true
+          schema:
+            type: string
+            format: date-time
+        status:
+          required: true
+          schema:
+            $ref: "#/components/schemas/ResourceStatus"
+    Widget:
+      $includes: "Resource"
+      members:
+        id:
+          schema:
+            # Because of how `$merge` works, we can customize things
+            # declared by the base interface.
+            example: "994fc99e-fa9f-454b-a3de-c1966ae61533"
+        sku:
+          required: true
+          # This type can be initialized, but not changed later.
+          # `initializable` defaults to the value of `mutable` if not
+          # specified.
+          initializable: true
+          mutable: false
+          schema:
+            type: string
+        name:
+          mutable: true
+          schema:
+            type: string
+        vendor_id:
+          required: true
+          initializable: true
+          mutable: false
+          schema:
+            type: string
+            format: uuid
+        metadata:
+          required: true
+          # TODO: We need some way to specify "this field is a mandatory
+          # part of the base type, but if you omit it from POST, there's a
+          # default value we can use." This may not be a clean way to do it.
+          #
+          #defaults: true
+          mutable: true
+          schema:
+            # We can use the special `#SameAsInterface` fragment to say, "If
+            # we're defining `Widget#Post`, use `Metadata#Post`. If we're
+            # defining `Widget#Put`, use `Metadata#Put`". This allows generating
+            # complex nested types.
+            $interface: "Metadata#SameAsInterface"
+    # A `Record<string, string | number | boolean>` example.
+    Metadata:
+      # `additionalMembers` works like `additionalProperties`, but 
+      additionalMembers:
+        # TODO: I don't think `required` makes sense here, but everything else
+        # does.        
+        mutable: true
+        schema:
+          type:
+            - string
+            - number
+            - boolean
