@@ -8,8 +8,8 @@ paths:
         required: true
         content:
           application/json:
-              schema:
-                $ref: "#/components/schemas/WidgetPost"
+            schema:
+              $ref: "#/components/schemas/WidgetPost"
       responses:
         201:
           content:
@@ -84,7 +84,7 @@ components:
           format: uuid
         metadata:
           $ref: "#/components/schemas/Metadata"
-      additionalProperties: false      
+      additionalProperties: false
     WidgetPost:
       type: object
       required:
@@ -101,7 +101,7 @@ components:
           format: uuid
         metadata:
           $ref: "#/components/schemas/MetadataPost"
-      additionalProperties: false      
+      additionalProperties: false
     WidgetPut:
       type: object
       required:
@@ -111,17 +111,17 @@ components:
           type: string
         metadata:
           $ref: "#/components/schemas/MetadataPut"
-      additionalProperties: false      
+      additionalProperties: false
     WidgetMergePatch:
       type: object
       properties:
         name:
-          type:
-            - string
-            - "null"
+          oneOf:
+            - type: string
+            - type: "null"
         metadata:
           $ref: "#/components/schemas/MetadataMergePatch"
-      additionalProperties: false      
+      additionalProperties: false
     Metadata:
       type: object
       additionalProperties:

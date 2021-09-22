@@ -7,7 +7,7 @@
 //! specification](https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md).
 
 use anyhow::{format_err, Context, Result};
-use log::error;
+use log::debug;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io;
@@ -16,6 +16,7 @@ use std::{collections::BTreeMap, fs, path::Path, sync::Arc};
 mod interface;
 mod scalar_or_vec;
 mod schema;
+mod serde_helpers;
 mod transpile;
 
 use crate::parse_error::{Annotation, FileInfo, ParseError};
@@ -56,7 +57,7 @@ impl OpenApi {
                 annotations,
                 err.to_string(),
             );
-            error!("parse error: {}", parse_error);
+            debug!("parse error: {}", parse_error);
             parse_error.into()
         })
     }

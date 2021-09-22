@@ -11,12 +11,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use topological_sort::TopologicalSort;
 
-use crate::openapi::schema::{AdditionalProperties, BasicSchema, Type};
+use crate::openapi::{
+    schema::{AdditionalProperties, BasicSchema, Type},
+    serde_helpers::{default_as_true, deserialize_enum_helper},
+};
 
 use super::{schema::Schema, Scope, Transpile};
 
 /// Which version of an interface are we working with?
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InterfaceVariant {
     /// The version of the interface returned from the server (by `GET` for
     /// example).
@@ -149,7 +152,7 @@ impl Transpile for Interfaces {
             }
             for variant in INTERFACE_VARIANTS.iter().cloned() {
                 let schema_name = interface.schema_variant_name(name, variant);
-                let schema = interface.generate_schema_variant(scope, variant)?;
+                let schema = interface.generate_schema_variant(scope, name, variant)?;
                 if schemas.insert(schema_name.clone(), schema).is_some() {
                     return Err(format_err!(
                         "generated multiple schemas named {:?}",
@@ -166,7 +169,7 @@ impl Transpile for Interfaces {
 ///
 /// This is our main extension to OpenAPI. It allows specifying an object schema
 /// in way that's less "validation-like" and more "type-like".
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum Interface {
     /// An interface that `$includes` another interface. We can't parse this
@@ -176,9 +179,31 @@ pub enum Interface {
     Basic(BasicInterface),
 }
 
-/// Helper function for `serde` defaults. Always returns `true`.
-fn default_as_true() -> bool {
-    true
+impl<'de> Deserialize<'de> for Interface {
+    // Manually deserialize for slightly better error messages.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde_yaml::{Mapping, Value};
+
+        // Parse it as raw YAML.
+        let yaml = Mapping::deserialize(deserializer)?;
+
+        // Look for `$includes`.
+        let includes_key = Value::String(String::from("$includes"));
+        if yaml.contains_key(&includes_key) {
+            Ok(Interface::Includes(deserialize_enum_helper::<D, _>(
+                "`$includes` interface",
+                yaml,
+            )?))
+        } else {
+            Ok(Interface::Basic(deserialize_enum_helper::<D, _>(
+                "interface",
+                yaml,
+            )?))
+        }
+    }
 }
 
 /// An interface which `$includes` another.
@@ -239,6 +264,16 @@ pub struct BasicInterface {
     /// `additionalMembers` if you want to ignore unknown members.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     additional_members: Option<Member>,
+
+    /// A description of this type.
+    #[serde(default)]
+    description: Option<String>,
+
+    /// Example data for this type.
+    ///
+    /// TODO: We'll need multiple versions for different variants, sadly.
+    #[serde(default)]
+    example: Option<Value>,
 }
 
 impl BasicInterface {
@@ -248,7 +283,12 @@ impl BasicInterface {
     }
 
     /// Generate a specific schema variant from this interface.
-    fn generate_schema_variant(&self, scope: &Scope, variant: InterfaceVariant) -> Result<Schema> {
+    fn generate_schema_variant(
+        &self,
+        scope: &Scope,
+        name: &str,
+        variant: InterfaceVariant,
+    ) -> Result<Schema> {
         // We always have type "object".
         let mut types = BTreeSet::new();
         types.insert(Type::Object);
@@ -269,7 +309,8 @@ impl BasicInterface {
         let additional_properties = match &self.additional_members {
             Some(additional_members) if additional_members.required => {
                 return Err(format_err!(
-                    "cannot use `required` with `additional_members`"
+                    "cannot use `required` with `additional_members` in {}",
+                    name,
                 ));
             }
             Some(additional_members) => {
@@ -285,13 +326,31 @@ impl BasicInterface {
             None => AdditionalProperties::Bool(false),
         };
 
+        // TODO: Only include the description on the base type for now.
+        let description = if variant == InterfaceVariant::Get {
+            self.description.clone()
+        } else {
+            None
+        };
+
+        // TODO: Only include the example on the POST type now. We **will**
+        // break this.
+        let example = if variant == InterfaceVariant::Post {
+            self.example.clone()
+        } else {
+            None
+        };
+
         // Build a schema for this interface.
         let schema = BasicSchema {
             types,
             required,
             properties,
             additional_properties,
+            items: None,
             nullable: None,
+            description,
+            example,
             unknown_fields: BTreeMap::default(),
         };
         Ok(Schema::Basic(Box::new(schema)))

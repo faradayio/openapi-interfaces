@@ -39,9 +39,9 @@ components:
       type: object
       properties:
         comment:
-          type:
-            - string
-            - "null"
+          oneOf:
+            - type: string
+            - type: "null"
         name:
           type: string
       additionalProperties: false

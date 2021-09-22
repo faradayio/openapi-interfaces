@@ -57,8 +57,13 @@ impl Schema {
             // We already allow `null` (without following refs), so do nothing.
             schema if schema.allows_local_null() => schema.to_owned(),
 
-            // We have a `BaseSchema`, so just add `null` to our existing `type` list.
-            Schema::Basic(base) => {
+            // We have a `BaseSchema`, so we can just add `null` to our existing
+            // `type` list.
+            //
+            // However, `openapi-typescript` (which we care about) does not
+            // currently support a list for `types`, so we're careful not to
+            // introduce an extra element if we have exactly one.
+            Schema::Basic(base) if base.types.len() != 1 => {
                 let mut base = base.as_ref().to_owned();
                 base.types.insert(Type::Null);
                 Schema::Basic(Box::new(base))
@@ -160,9 +165,23 @@ pub struct BasicSchema {
     #[serde(default, skip_serializing_if = "AdditionalProperties::is_default")]
     pub(crate) additional_properties: AdditionalProperties,
 
+    /// Array item type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) items: Option<Schema>,
+
     /// Older OpenAPI way of specifying nullable fields.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) nullable: Option<bool>,
+
+    /// A description of this type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) description: Option<String>,
+
+    /// Example data for this type.
+    ///
+    /// TODO: We'll need multiple versions for different variants, sadly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) example: Option<Value>,
 
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
@@ -179,7 +198,10 @@ impl BasicSchema {
             required: Default::default(),
             properties: Default::default(),
             additional_properties: Default::default(),
+            items: Default::default(),
             nullable: None,
+            description: Default::default(),
+            example: Default::default(),
             unknown_fields: Default::default(),
         }
     }
@@ -200,7 +222,10 @@ impl Transpile for BasicSchema {
             required: self.required.clone(),
             properties: self.properties.transpile(scope)?,
             additional_properties: self.additional_properties.transpile(scope)?,
+            items: self.items.transpile(scope)?,
             nullable: None,
+            description: self.description.clone(),
+            example: self.example.clone(),
             unknown_fields: self.unknown_fields.clone(),
         })
     }
