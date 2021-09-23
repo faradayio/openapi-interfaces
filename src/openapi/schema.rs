@@ -8,10 +8,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::openapi::serde_helpers::deserialize_enum_helper;
+
 use super::{interface::InterfaceVariant, scalar_or_vec, Scope, Transpile};
 
 /// Different possibilities for a schema.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum Schema {
     /// A value must match all of the specified schemas.
@@ -27,6 +29,55 @@ pub enum Schema {
     /// OpenAPI, it is important _not_ to evaluate `$ref`, because OpenAPI code
     /// generators handle `$ref` specially.
     Ref(Ref),
+}
+
+impl<'de> Deserialize<'de> for Schema {
+    // Manually deserialize for slightly better error messages.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::Error;
+        use serde_yaml::{Mapping, Value};
+
+        // Parse it as raw YAML.
+        let yaml = Mapping::deserialize(deserializer)?;
+
+        // Helper to construct YAML hash keys.
+        let yaml_str = |s| Value::String(String::from(s));
+
+        // Look for `$includes`.
+        if yaml.contains_key(&yaml_str("allOf")) {
+            Ok(Schema::AllOf(deserialize_enum_helper::<D, _>(
+                "allOf schema",
+                yaml,
+            )?))
+        } else if yaml.contains_key(&yaml_str("oneOf")) {
+            Ok(Schema::OneOf(deserialize_enum_helper::<D, _>(
+                "oneOf schema",
+                yaml,
+            )?))
+        } else if yaml.contains_key(&yaml_str("type")) {
+            Ok(Schema::Basic(deserialize_enum_helper::<D, _>(
+                "schema", yaml,
+            )?))
+        } else if yaml.contains_key(&yaml_str("$ref")) {
+            Ok(Schema::Ref(deserialize_enum_helper::<D, _>(
+                "$ref schema",
+                yaml,
+            )?))
+        } else if yaml.contains_key(&yaml_str("$interface")) {
+            Ok(Schema::InterfaceRef(deserialize_enum_helper::<D, _>(
+                "$interface schema",
+                yaml,
+            )?))
+        } else {
+            Err(D::Error::custom(format!(
+                "expected to find one of allOf, oneOf, type, $ref or $interface ref in:\n{}",
+                serde_yaml::to_string(&yaml).expect("error serializing YAML"))
+            ))
+        }
+    }
 }
 
 impl Schema {
