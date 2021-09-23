@@ -1,0 +1,73 @@
+# AUTOMATICALLY GENERATED. DO NOT EDIT.
+---
+paths:
+  /widgets:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WidgetPost"
+        required: true
+      responses:
+        201:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Widget"
+components:
+  schemas:
+    Widget:
+      type: object
+      required:
+        - id
+        - name
+        - readonly
+      properties:
+        comment:
+          type: string
+        id:
+          type: string
+          example: e35a3c8d-5486-49ec-9b23-6747afc19570
+          format: uuid
+        name:
+          type: string
+        readonly:
+          type: string
+      additionalProperties: false
+    WidgetMergePatch:
+      type: object
+      properties:
+        comment:
+          oneOf:
+            - type: string
+            - type: "null"
+        name:
+          type: string
+      additionalProperties: false
+    WidgetPost:
+      type: object
+      required:
+        - name
+        - readonly
+      properties:
+        comment:
+          type: string
+        name:
+          type: string
+        readonly:
+          type: string
+      additionalProperties: false
+    WidgetPut:
+      type: object
+      required:
+        - name
+      properties:
+        comment:
+          type: string
+        name:
+          type: string
+      additionalProperties: false
+info:
+  title: Example OpenAPI definition
+openapi: 3.1.0

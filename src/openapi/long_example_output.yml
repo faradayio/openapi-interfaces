@@ -1,0 +1,153 @@
+openapi: 3.1.0
+info:
+  title: Example OpenAPI definition
+paths:
+  /widgets:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WidgetPost"
+      responses:
+        201:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Widget"
+  /widgets/{id}:
+    patch:
+      parameters:
+        - name: dataset_id
+          in: path
+          description: The UUID of a dataset
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json+merge-patch:
+            schema:
+              $ref: "#/components/schemas/WidgetMergePatch"
+        required: true
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Widget"
+        404:
+          description: The requested ID was not found
+          content: {}
+components:
+  schemas:
+    ResourceStatus:
+      type: string
+      description: The current state of this resource.
+      example: new
+      enum:
+        - new
+        - updating
+        - ready
+        - error
+    Widget:
+      type: object
+      required:
+        - created_at
+        - id
+        - metadata
+        - sku
+        - status
+        - updated_at
+        - vendor_id
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "994fc99e-fa9f-454b-a3de-c1966ae61533"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/ResourceStatus"
+        sku:
+          type: string
+        name:
+          type: string
+        vendor_id:
+          type: string
+          format: uuid
+        metadata:
+          $ref: "#/components/schemas/Metadata"
+      additionalProperties: false
+    WidgetPost:
+      type: object
+      required:
+        - metadata
+        - sku
+        - vendor_id
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        vendor_id:
+          type: string
+          format: uuid
+        metadata:
+          $ref: "#/components/schemas/MetadataPost"
+      additionalProperties: false
+    WidgetPut:
+      type: object
+      required:
+        - metadata
+      properties:
+        name:
+          type: string
+        metadata:
+          $ref: "#/components/schemas/MetadataPut"
+      additionalProperties: false
+    WidgetMergePatch:
+      type: object
+      properties:
+        name:
+          oneOf:
+            - type: string
+            - type: "null"
+        metadata:
+          $ref: "#/components/schemas/MetadataMergePatch"
+      additionalProperties: false
+    Metadata:
+      type: object
+      additionalProperties:
+        type:
+          - boolean
+          - number
+          - string
+    MetadataPost:
+      type: object
+      additionalProperties:
+        type:
+          - boolean
+          - number
+          - string
+    MetadataPut:
+      type: object
+      additionalProperties:
+        type:
+          - boolean
+          - number
+          - string
+    MetadataMergePatch:
+      type: object
+      additionalProperties:
+        type:
+          - boolean
+          - "null"
+          - number
+          - string
