@@ -44,13 +44,14 @@ impl OpenApi {
     /// Read an OpenAPI file from the specified path.
     pub fn from_path(path: &Path) -> Result<Self> {
         let display_path = path.display().to_string();
-        let contents =
-            fs::read_to_string(path).with_context(|| format!("error reading {}", display_path))?;
+        let contents = fs::read_to_string(path)
+            .with_context(|| format!("error reading {}", display_path))?;
 
         serde_yaml::from_str(&contents).map_err(|err| {
             let mut annotations = vec![];
             if let Some(loc) = err.location() {
-                annotations.push(Annotation::primary(loc.index(), "error occurred here"));
+                annotations
+                    .push(Annotation::primary(loc.index(), "error occurred here"));
             }
             let parse_error = ParseError::new(
                 Arc::new(FileInfo::new(display_path, contents)),
@@ -125,7 +126,9 @@ impl Transpile for Components {
 /// HTTP methods.
 ///
 /// Feel free to add more as needed.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(
+    Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize,
+)]
 #[serde(rename_all = "lowercase")]
 #[allow(clippy::missing_docs_in_private_items)]
 enum Method {
@@ -253,9 +256,12 @@ fn parses_example() {
 fn parses_long_example() {
     use pretty_assertions::assert_eq;
 
-    let parsed = OpenApi::from_path(Path::new("./src/openapi/long_example.yml")).unwrap();
+    let parsed =
+        OpenApi::from_path(Path::new("./src/openapi/long_example.yml")).unwrap();
     //println!("{:#?}", parsed);
     let transpiled = parsed.transpile(&Scope::default()).unwrap();
-    let expected = OpenApi::from_path(Path::new("./src/openapi/long_example_output.yml")).unwrap();
+    let expected =
+        OpenApi::from_path(Path::new("./src/openapi/long_example_output.yml"))
+            .unwrap();
     assert_eq!(transpiled, expected);
 }

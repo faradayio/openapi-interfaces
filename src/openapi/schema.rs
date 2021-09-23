@@ -42,8 +42,12 @@ impl Schema {
     /// `$interface` compiles to `$ref`.)
     fn allows_local_null(&self) -> bool {
         match self {
-            Schema::AllOf(all_of) => all_of.schemas.iter().all(|s| s.allows_local_null()),
-            Schema::OneOf(one_of) => one_of.schemas.iter().any(|s| s.allows_local_null()),
+            Schema::AllOf(all_of) => {
+                all_of.schemas.iter().all(|s| s.allows_local_null())
+            }
+            Schema::OneOf(one_of) => {
+                one_of.schemas.iter().any(|s| s.allows_local_null())
+            }
             Schema::Basic(base) => base.types.contains(&Type::Null),
             Schema::InterfaceRef(_) => false,
             Schema::Ref(_) => false,
@@ -92,7 +96,9 @@ impl Transpile for Schema {
         match self {
             Schema::AllOf(all_of) => Ok(Schema::AllOf(all_of.transpile(scope)?)),
             Schema::OneOf(one_of) => Ok(Schema::OneOf(one_of.transpile(scope)?)),
-            Schema::Basic(schema) => Ok(Schema::Basic(Box::new(schema.transpile(scope)?))),
+            Schema::Basic(schema) => {
+                Ok(Schema::Basic(Box::new(schema.transpile(scope)?)))
+            }
             Schema::InterfaceRef(r) => Ok(Schema::Ref(r.transpile(scope)?)),
             Schema::Ref(r) => Ok(Schema::Ref(r.transpile(scope)?)),
         }

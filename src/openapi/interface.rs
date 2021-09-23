@@ -129,11 +129,14 @@ impl Transpile for Interfaces {
                 .expect("interface should always be in hash table");
             match interface {
                 Interface::Includes(inclusion) => {
-                    let mut doc = serde_json::to_value(expanded.get(inclusion.base.as_str()))?;
+                    let mut doc =
+                        serde_json::to_value(expanded.get(inclusion.base.as_str()))?;
                     let patch = Value::Object(inclusion.merge_patch.clone());
                     json_merge_patch(&mut doc, &patch);
                     let mut reparsed = serde_json::from_value::<BasicInterface>(doc)
-                        .with_context(|| format!("error parsing merged {:?}", name))?;
+                        .with_context(|| {
+                        format!("error parsing merged {:?}", name)
+                    })?;
                     reparsed.emit = inclusion.emit; // This is never merged.
                     expanded.insert(name, reparsed);
                 }
@@ -152,7 +155,8 @@ impl Transpile for Interfaces {
             }
             for variant in INTERFACE_VARIANTS.iter().cloned() {
                 let schema_name = interface.schema_variant_name(name, variant);
-                let schema = interface.generate_schema_variant(scope, name, variant)?;
+                let schema =
+                    interface.generate_schema_variant(scope, name, variant)?;
                 if schemas.insert(schema_name.clone(), schema).is_some() {
                     return Err(format_err!(
                         "generated multiple schemas named {:?}",
@@ -398,7 +402,11 @@ impl Member {
     /// A JSON Schema to use for this property when generating the specified
     /// variant. Returns `None` if this property is not available in the
     /// specified variant.
-    fn schema_for(&self, scope: &Scope, variant: InterfaceVariant) -> Result<Option<Schema>> {
+    fn schema_for(
+        &self,
+        scope: &Scope,
+        variant: InterfaceVariant,
+    ) -> Result<Option<Schema>> {
         let scope = scope.with_variant(variant);
         Ok(match variant {
             InterfaceVariant::Get => Some(self.schema.transpile(&scope)?),
@@ -406,7 +414,9 @@ impl Member {
                 Some(self.schema.transpile(&scope)?)
             }
             InterfaceVariant::Post => None,
-            InterfaceVariant::Put if self.mutable => Some(self.schema.transpile(&scope)?),
+            InterfaceVariant::Put if self.mutable => {
+                Some(self.schema.transpile(&scope)?)
+            }
             InterfaceVariant::Put => None,
             InterfaceVariant::MergePatch if self.mutable => {
                 let schema = self.schema.transpile(&scope)?;

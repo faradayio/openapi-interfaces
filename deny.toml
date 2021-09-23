@@ -1,0 +1,22 @@
+# Project policies.
+#
+# These policies can be enforced using `cargo deny check`.
+
+[licenses]
+# Don't allow code with an unclear license.
+unlicensed = "deny"
+
+# Don't allow "copylefted" licenses unless they're listed below.
+copyleft = "deny"
+
+# Allow common non-restrictive licenses. ISC is used for various DNS and crypto
+# things, and it's a minimally restrictive open source license.
+allow = ["MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause", "CC0-1.0", "ISC", "OpenSSL", "Zlib"]
+
+# Many organizations ban AGPL-licensed code
+# https://opensource.google/docs/using/agpl-policy/
+deny = ["AGPL-3.0"]
+
+[bans]
+# Warn about multiple versions of the same crate, unless we've indicated otherwise below.
+multiple-versions = "warn"
