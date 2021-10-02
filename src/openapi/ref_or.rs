@@ -73,7 +73,7 @@ where
         } else {
             Ok(RefOr::Value(deserialize_enum_helper::<D, _>(
                 &format!(
-                    "expected $ref, $interface or {}",
+                    "$ref, $interface or {}",
                     <T as ExpectedWhenParsing>::expected_when_parsing(),
                 ),
                 yaml,

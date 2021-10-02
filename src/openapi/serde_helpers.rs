@@ -31,7 +31,7 @@ where
     match serde_yaml::from_value::<T>(Value::Mapping(yaml.clone())) {
         Ok(val) => Ok(val),
         Err(err) => Err(D::Error::custom(format!(
-            "error parsing {}: {}\nerror occurred in:\n{}",
+            "expected {}: {}\nerror occurred in:\n{}",
             expected,
             err,
             serde_yaml::to_string(&yaml).expect("error serializing YAML for error"),

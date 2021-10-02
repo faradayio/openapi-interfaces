@@ -181,6 +181,32 @@ impl Transpile for Operation {
     }
 }
 
+#[test]
+fn deserializes_operation_responses_without_refs() {
+    let yaml = r#"
+responses:
+  200:
+    description: A list of datasets
+    content:
+      application/json:
+        schema:
+          type: array
+          items:
+            $interface: "Dataset"
+"#;
+    serde_yaml::from_str::<Operation>(yaml).unwrap();
+}
+
+#[test]
+fn deserializes_operation_responses_with_refs() {
+    let yaml = r##"
+responses:
+  200:
+    $ref: "#/components/responses/Ok"
+"##;
+    serde_yaml::from_str::<Operation>(yaml).unwrap();
+}
+
 /// Specification of an HTTP request body.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -14,10 +14,8 @@ use super::{
     scalar_or_vec, Scope, Transpile,
 };
 
-/// Interface for schema types that can be made nullable.
-///
-///
-pub trait Nullable {
+/// Interface for schema types that might be able to match against `null`.
+pub(crate) trait Nullable {
     /// Construct a simple schema that only allows `null` values.
     fn null() -> Self;
 
@@ -59,6 +57,16 @@ impl Nullable for Schema {
             RefOr::Value(value) => value.allows_local_null(),
         }
     }
+}
+
+#[test]
+fn deserializes_array_schema() {
+    let yaml = r#"
+type: array
+items:
+  $interface: "Dataset"
+"#;
+    serde_yaml::from_str::<Schema>(yaml).unwrap();
 }
 
 /// Different possibilities for a schema.
@@ -105,7 +113,7 @@ impl<'de> Deserialize<'de> for BasicSchema {
             )?))
         } else {
             Err(D::Error::custom(format!(
-                "expected to find one of allOf, oneOf, type ref in:\n{}",
+                "one of allOf, oneOf, or type in:\n{}",
                 serde_yaml::to_string(&yaml).expect("error serializing YAML")
             )))
         }
@@ -254,7 +262,7 @@ pub struct PrimativeSchema {
 
     /// Array item type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) items: Option<BasicSchema>,
+    pub(crate) items: Option<Schema>,
 
     /// Older OpenAPI way of specifying nullable fields.
     #[serde(default, skip_serializing_if = "Option::is_none")]
