@@ -3,35 +3,77 @@
 //! The types in this file are based on [JSON Schema Specification Draft
 //! 2020-12](https://tools.ietf.org/html/draft-bhutton-json-schema-00#section-4.2.1).
 
-use anyhow::format_err;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::openapi::serde_helpers::deserialize_enum_helper;
 
-use super::{interface::InterfaceVariant, scalar_or_vec, Scope, Transpile};
+use super::{
+    ref_or::{ExpectedWhenParsing, RefOr},
+    scalar_or_vec, Scope, Transpile,
+};
+
+/// Interface for schema types that can be made nullable.
+///
+///
+pub trait Nullable {
+    /// Construct a simple schema that only allows `null` values.
+    fn null() -> Self;
+
+    /// Construct a version of this schema that allows `null`, as well as any
+    /// other values it might have allowed before.
+    fn allowing_null(&self) -> Self;
+
+    /// (Normally internal.) Does this schema allow a null value without
+    /// resolving `$ref` or `$interface` links?
+    ///
+    /// (Most OpenAPI-based code generators rely on not resolving `$ref`, and
+    /// `$interface` compiles to `$ref`.)
+    fn allows_local_null(&self) -> bool;
+}
+
+/// Different possibilities for a schema.
+pub(crate) type Schema = RefOr<BasicSchema>;
+
+impl Nullable for Schema {
+    fn null() -> Self {
+        RefOr::Value(BasicSchema::null())
+    }
+
+    fn allowing_null(&self) -> Schema {
+        match self {
+            RefOr::Ref(_) | RefOr::InterfaceRef(_) => {
+                RefOr::Value(BasicSchema::OneOf(OneOf {
+                    schemas: vec![self.clone()],
+                    unknown_fields: Default::default(),
+                }))
+            }
+            RefOr::Value(val) => RefOr::Value(val.allowing_null()),
+        }
+    }
+
+    fn allows_local_null(&self) -> bool {
+        match self {
+            RefOr::Ref(_) | RefOr::InterfaceRef(_) => false,
+            RefOr::Value(value) => value.allows_local_null(),
+        }
+    }
+}
 
 /// Different possibilities for a schema.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
-pub enum Schema {
+pub(crate) enum BasicSchema {
     /// A value must match all of the specified schemas.
     AllOf(AllOf),
     /// A value must match at least one of the specified schemas.
     OneOf(OneOf),
     /// A basic schema containing `type` and additional fields.
-    Basic(Box<BasicSchema>),
-    /// A schema containing our `$interface` extension. Analogous to `$ref`, but
-    /// it works with interface types.
-    InterfaceRef(InterfaceRef),
-    /// A reference to a schema fragment defined elsewhere. When working with
-    /// OpenAPI, it is important _not_ to evaluate `$ref`, because OpenAPI code
-    /// generators handle `$ref` specially.
-    Ref(Ref),
+    Primitive(Box<PrimativeSchema>),
 }
 
-impl<'de> Deserialize<'de> for Schema {
+impl<'de> Deserialize<'de> for BasicSchema {
     // Manually deserialize for slightly better error messages.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -48,66 +90,52 @@ impl<'de> Deserialize<'de> for Schema {
 
         // Look for `$includes`.
         if yaml.contains_key(&yaml_str("allOf")) {
-            Ok(Schema::AllOf(deserialize_enum_helper::<D, _>(
+            Ok(BasicSchema::AllOf(deserialize_enum_helper::<D, _>(
                 "allOf schema",
                 yaml,
             )?))
         } else if yaml.contains_key(&yaml_str("oneOf")) {
-            Ok(Schema::OneOf(deserialize_enum_helper::<D, _>(
+            Ok(BasicSchema::OneOf(deserialize_enum_helper::<D, _>(
                 "oneOf schema",
                 yaml,
             )?))
         } else if yaml.contains_key(&yaml_str("type")) {
-            Ok(Schema::Basic(deserialize_enum_helper::<D, _>(
+            Ok(BasicSchema::Primitive(deserialize_enum_helper::<D, _>(
                 "schema", yaml,
-            )?))
-        } else if yaml.contains_key(&yaml_str("$ref")) {
-            Ok(Schema::Ref(deserialize_enum_helper::<D, _>(
-                "$ref schema",
-                yaml,
-            )?))
-        } else if yaml.contains_key(&yaml_str("$interface")) {
-            Ok(Schema::InterfaceRef(deserialize_enum_helper::<D, _>(
-                "$interface schema",
-                yaml,
             )?))
         } else {
             Err(D::Error::custom(format!(
-                "expected to find one of allOf, oneOf, type, $ref or $interface ref in:\n{}",
-                serde_yaml::to_string(&yaml).expect("error serializing YAML"))
-            ))
+                "expected to find one of allOf, oneOf, type ref in:\n{}",
+                serde_yaml::to_string(&yaml).expect("error serializing YAML")
+            )))
         }
     }
 }
 
-impl Schema {
-    /// Construct a simple schema which matches `null`.
-    fn null() -> Schema {
-        Schema::Basic(Box::new(BasicSchema::null()))
+impl ExpectedWhenParsing for BasicSchema {
+    fn expected_when_parsing() -> &'static str {
+        "a schema with one of allOf, oneOf, or type"
+    }
+}
+
+impl Nullable for BasicSchema {
+    fn null() -> BasicSchema {
+        BasicSchema::Primitive(Box::new(PrimativeSchema::null()))
     }
 
-    /// Does this schema allow a null value without resolving `$ref` or
-    /// `$interface` links?
-    ///
-    /// (Most OpenAPI-based code generators rely on not resolving `$ref`, and
-    /// `$interface` compiles to `$ref`.)
     fn allows_local_null(&self) -> bool {
         match self {
-            Schema::AllOf(all_of) => {
+            BasicSchema::AllOf(all_of) => {
                 all_of.schemas.iter().all(|s| s.allows_local_null())
             }
-            Schema::OneOf(one_of) => {
+            BasicSchema::OneOf(one_of) => {
                 one_of.schemas.iter().any(|s| s.allows_local_null())
             }
-            Schema::Basic(base) => base.types.contains(&Type::Null),
-            Schema::InterfaceRef(_) => false,
-            Schema::Ref(_) => false,
+            BasicSchema::Primitive(base) => base.types.contains(&Type::Null),
         }
     }
 
-    /// Construct a version of this schema that allows `null`, as well as any
-    /// other values it might have allowed before.
-    pub fn allowing_null(&self) -> Schema {
+    fn allowing_null(&self) -> BasicSchema {
         match self {
             // We already allow `null` (without following refs), so do nothing.
             schema if schema.allows_local_null() => schema.to_owned(),
@@ -118,40 +146,42 @@ impl Schema {
             // However, `openapi-typescript` (which we care about) does not
             // currently support a list for `types`, so we're careful not to
             // introduce an extra element if we have exactly one.
-            Schema::Basic(base) if base.types.len() != 1 => {
+            BasicSchema::Primitive(base) if base.types.len() != 1 => {
                 let mut base = base.as_ref().to_owned();
                 base.types.insert(Type::Null);
-                Schema::Basic(Box::new(base))
+                BasicSchema::Primitive(Box::new(base))
             }
 
             // We have a `OneOf` schema, so just add `null` **at the end**.
-            Schema::OneOf(one_of) => {
+            BasicSchema::OneOf(one_of) => {
                 let mut one_of = one_of.to_owned();
                 one_of.schemas.push(Schema::null());
-                Schema::OneOf(one_of)
+                BasicSchema::OneOf(one_of)
             }
 
             // We have some other schema type, so we'll need to create a `OneOf` node.
-            schema => Schema::OneOf(OneOf {
-                schemas: vec![schema.to_owned(), Schema::null()],
+            schema => BasicSchema::OneOf(OneOf {
+                schemas: vec![RefOr::Value(schema.to_owned()), Schema::null()],
                 unknown_fields: Default::default(),
             }),
         }
     }
 }
 
-impl Transpile for Schema {
+impl Transpile for BasicSchema {
     type Output = Self;
 
     fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
         match self {
-            Schema::AllOf(all_of) => Ok(Schema::AllOf(all_of.transpile(scope)?)),
-            Schema::OneOf(one_of) => Ok(Schema::OneOf(one_of.transpile(scope)?)),
-            Schema::Basic(schema) => {
-                Ok(Schema::Basic(Box::new(schema.transpile(scope)?)))
+            BasicSchema::AllOf(all_of) => {
+                Ok(BasicSchema::AllOf(all_of.transpile(scope)?))
             }
-            Schema::InterfaceRef(r) => Ok(Schema::Ref(r.transpile(scope)?)),
-            Schema::Ref(r) => Ok(Schema::Ref(r.transpile(scope)?)),
+            BasicSchema::OneOf(one_of) => {
+                Ok(BasicSchema::OneOf(one_of.transpile(scope)?))
+            }
+            BasicSchema::Primitive(schema) => {
+                Ok(BasicSchema::Primitive(Box::new(schema.transpile(scope)?)))
+            }
         }
     }
 }
@@ -205,7 +235,7 @@ impl Transpile for OneOf {
 /// A basic JSON Schema fragment.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BasicSchema {
+pub struct PrimativeSchema {
     /// A set of value types which this schema will match.
     #[serde(rename = "type", with = "scalar_or_vec")]
     pub(crate) types: BTreeSet<Type>,
@@ -224,7 +254,7 @@ pub struct BasicSchema {
 
     /// Array item type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) items: Option<Schema>,
+    pub(crate) items: Option<BasicSchema>,
 
     /// Older OpenAPI way of specifying nullable fields.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -245,12 +275,12 @@ pub struct BasicSchema {
     pub(crate) unknown_fields: BTreeMap<String, Value>,
 }
 
-impl BasicSchema {
+impl PrimativeSchema {
     /// Construct a `BaseSchema` that matches `null`.
-    fn null() -> BasicSchema {
+    fn null() -> PrimativeSchema {
         let mut types = BTreeSet::new();
         types.insert(Type::Null);
-        BasicSchema {
+        PrimativeSchema {
             types,
             required: Default::default(),
             properties: Default::default(),
@@ -264,7 +294,7 @@ impl BasicSchema {
     }
 }
 
-impl Transpile for BasicSchema {
+impl Transpile for PrimativeSchema {
     type Output = Self;
 
     fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
@@ -306,7 +336,7 @@ pub enum Type {
 /// An `additionalProperties` value.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
-pub enum AdditionalProperties {
+pub(crate) enum AdditionalProperties {
     /// `true` (allowing any property) or `false` (allowing none).
     Bool(bool),
     /// All unknown property values must match the specified schema.
@@ -336,80 +366,5 @@ impl Transpile for AdditionalProperties {
                 Ok(AdditionalProperties::Schema(s.transpile(scope)?))
             }
         }
-    }
-}
-
-/// A `$ref` schema.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Ref {
-    /// Path to reference.
-    #[serde(rename = "$ref")]
-    target: String,
-
-    /// YAML fields we want to pass through blindly.
-    #[serde(flatten)]
-    unknown_fields: BTreeMap<String, Value>,
-}
-
-impl Transpile for Ref {
-    type Output = Self;
-
-    fn transpile(&self, _scope: &Scope) -> anyhow::Result<Self::Output> {
-        if !self.unknown_fields.is_empty() {
-            return Err(format_err!("`$ref:` must not have any sibling values"));
-        }
-
-        Ok(self.clone())
-    }
-}
-
-/// Our custom `$interface` schema. Analogous to `$ref`, but refers to a specifc
-/// variant of an interface.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct InterfaceRef {
-    /// Path to reference.
-    #[serde(rename = "$interface")]
-    target: String,
-
-    /// YAML fields we want to pass through blindly.
-    #[serde(flatten)]
-    unknown_fields: BTreeMap<String, Value>,
-}
-
-impl Transpile for InterfaceRef {
-    /// `InterfaceRef` values transpile to regular `Ref` value.
-    type Output = Ref;
-
-    fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
-        // This type is defined by us, so let's enforce this rule.
-        if !self.unknown_fields.is_empty() {
-            return Err(format_err!("`$include:` must not have any sibling values"));
-        }
-
-        // Figure out which interface variant to use.
-        let fragment_pos = self.target.find('#').unwrap_or_else(|| self.target.len());
-        let fragment = &self.target[fragment_pos..];
-        let variety = if fragment == "#SameAsInterface" {
-            // Get the interface variant from the surrounding scope.
-            if let Some(variant) = scope.variant {
-                variant
-            } else {
-                return Err(format_err!(
-                    "cannot use #SameAsInterface outside of a `components.interfaces` declaration"
-                ));
-            }
-        } else {
-            self.target[fragment_pos..].parse::<InterfaceVariant>()?
-        };
-
-        // Build our ref.
-        Ok(Ref {
-            target: format!(
-                "#/components/schemas/{}{}",
-                &self.target[..fragment_pos],
-                variety.to_schema_suffix_str()
-            ),
-            unknown_fields: BTreeMap::new(),
-        })
     }
 }

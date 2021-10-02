@@ -12,11 +12,15 @@ use serde_json::{Map, Value};
 use topological_sort::TopologicalSort;
 
 use crate::openapi::{
-    schema::{AdditionalProperties, BasicSchema, Type},
+    ref_or::RefOr,
+    schema::{AdditionalProperties, BasicSchema, PrimativeSchema, Type},
     serde_helpers::{default_as_true, deserialize_enum_helper},
 };
 
-use super::{schema::Schema, Scope, Transpile};
+use super::{
+    schema::{Nullable, Schema},
+    Scope, Transpile,
+};
 
 /// Which version of an interface are we working with?
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -89,7 +93,7 @@ impl FromStr for InterfaceVariant {
 /// implementation.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
-pub struct Interfaces(BTreeMap<String, Interface>);
+pub(crate) struct Interfaces(BTreeMap<String, Interface>);
 
 impl Interfaces {
     /// Is the `interfaces` section empty?
@@ -346,7 +350,7 @@ impl BasicInterface {
         };
 
         // Build a schema for this interface.
-        let schema = BasicSchema {
+        let schema = PrimativeSchema {
             types,
             required,
             properties,
@@ -357,7 +361,7 @@ impl BasicInterface {
             example,
             unknown_fields: BTreeMap::default(),
         };
-        Ok(Schema::Basic(Box::new(schema)))
+        Ok(RefOr::Value(BasicSchema::Primitive(Box::new(schema))))
     }
 }
 

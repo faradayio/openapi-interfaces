@@ -12,10 +12,7 @@ paths:
               $ref: "#/components/schemas/WidgetPost"
       responses:
         201:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Widget"
+          $ref: "#/components/responses/WidgetResponse"
   /widgets/{id}:
     patch:
       parameters:
@@ -34,14 +31,17 @@ paths:
         required: true
       responses:
         200:
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Widget"
+          $ref: "#/components/responses/WidgetResponse"
         404:
           description: The requested ID was not found
           content: {}
 components:
+  responses:
+    WidgetResponse:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Widget"
   schemas:
     ResourceStatus:
       type: string

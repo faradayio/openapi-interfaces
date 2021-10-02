@@ -8,16 +8,12 @@ paths:
         required: true
         content:
           application/json:
-              schema:
-                # Use the `POST` version of the `Widget` type. See below.
-                $interface: "Widget#Post"
+            schema:
+              # Use the `POST` version of the `Widget` type. See below.
+              $interface: "Widget#Post"
       responses:
         201:
-          content:
-            application/json:
-              schema:
-                # Use the `GET` version of the `Widget` type. See below.
-                $interface: "Widget"
+          $ref: "#/components/responses/WidgetResponse"
   /widgets/{id}:
     patch:
       parameters:
@@ -32,19 +28,23 @@ paths:
         content:
           application/json+merge-patch:
             schema:
-                # Use the `PATCH` version of the `Widget` type. See below.
+              # Use the `PATCH` version of the `Widget` type. See below.
               $interface: "Widget#MergePatch"
         required: true
       responses:
         200:
-          content:
-            application/json:
-              schema:
-                $interface: "Widget"
+          $ref: "#/components/responses/WidgetResponse"
         404:
           description: The requested ID was not found
           content: {}
 components:
+  responses:
+    WidgetResponse:
+      content:
+        application/json:
+          schema:
+            # Use the `GET` version of the `Widget` type. See below.
+            $interface: "Widget"
   # We can declare normal OpenAPI / JSON Schema schemas as always.
   schemas:
     ResourceStatus:
@@ -142,10 +142,10 @@ components:
             $interface: "Metadata#SameAsInterface"
     # A `Record<string, string | number | boolean>` example.
     Metadata:
-      # `additionalMembers` works like `additionalProperties`, but 
+      # `additionalMembers` works like `additionalProperties`, but
       additionalMembers:
         # TODO: I don't think `required` makes sense here, but everything else
-        # does.        
+        # does.
         mutable: true
         schema:
           type:

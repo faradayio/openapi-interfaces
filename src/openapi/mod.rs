@@ -14,6 +14,7 @@ use std::io;
 use std::{collections::BTreeMap, fs, path::Path, sync::Arc};
 
 mod interface;
+mod ref_or;
 mod scalar_or_vec;
 mod schema;
 mod serde_helpers;
@@ -22,6 +23,7 @@ mod transpile;
 use crate::parse_error::{Annotation, FileInfo, ParseError};
 
 use self::interface::Interfaces;
+use self::ref_or::{ExpectedWhenParsing, RefOr};
 use self::schema::Schema;
 pub use self::transpile::{Scope, Transpile};
 
@@ -87,6 +89,10 @@ impl Transpile for OpenApi {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Components {
+    /// Reuable response bodies.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    responses: BTreeMap<String, ResponseBody>,
+
     /// Re-usable data type definitions.
     #[serde(default)]
     schemas: BTreeMap<String, Schema>,
@@ -104,6 +110,8 @@ impl Transpile for Components {
     type Output = Self;
 
     fn transpile(&self, scope: &Scope) -> Result<Self> {
+        let responses = self.responses.transpile(scope)?;
+
         let mut schemas = self.schemas.transpile(scope)?;
         let interface_schemas = self.interfaces.transpile(scope)?;
         for (name, schema) in interface_schemas {
@@ -116,6 +124,7 @@ impl Transpile for Components {
         }
 
         Ok(Self {
+            responses,
             schemas,
             interfaces: Interfaces::default(),
             unknown_fields: self.unknown_fields.clone(),
@@ -153,7 +162,7 @@ struct Operation {
 
     /// Our HTTP response body definitions (by response code).
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    responses: BTreeMap<u16, ResponseBody>,
+    responses: BTreeMap<u16, RefOr<ResponseBody>>,
 
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
@@ -205,6 +214,12 @@ struct ResponseBody {
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
+}
+
+impl ExpectedWhenParsing for ResponseBody {
+    fn expected_when_parsing() -> &'static str {
+        "a response body definition"
+    }
 }
 
 impl Transpile for ResponseBody {
