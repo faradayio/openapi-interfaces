@@ -11,6 +11,11 @@ use super::interface::InterfaceVariant;
 /// scope" in a compiler for a regular programming language.
 #[non_exhaustive]
 pub struct Scope {
+    /// Do we want all merge patch types to have `type: object` and no further
+    /// constraints? This is necessary for Readme.com, which doesn't support
+    /// OpenAPI 3.1.0 or `type: "null"`.
+    pub use_generic_merge_patch_types: bool,
+
     /// The `InterfaceVariant` of the containing interface.
     pub variant: Option<InterfaceVariant>,
 }
@@ -20,6 +25,7 @@ impl Scope {
     /// variant.
     pub fn with_variant(&self, variant: InterfaceVariant) -> Scope {
         Self {
+            use_generic_merge_patch_types: self.use_generic_merge_patch_types,
             variant: Some(variant),
         }
     }
@@ -28,7 +34,10 @@ impl Scope {
 impl Default for Scope {
     /// Create an empty default scope.
     fn default() -> Self {
-        Self { variant: None }
+        Self {
+            use_generic_merge_patch_types: false,
+            variant: None,
+        }
     }
 }
 

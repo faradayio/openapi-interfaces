@@ -25,6 +25,14 @@ struct Opt {
     /// Optional output file name. Defaults to standard output.
     #[structopt(short = "o", long = "out-file")]
     output: Option<PathBuf>,
+
+    /// Do not introduce `type: "null"` in the output. This is automatic for
+    /// OpenAPI 3.0. This option will result in generic `MergePatch` types.
+    ///
+    /// Useful for compatibility with readme.com and other OpenAPI 3.0-only
+    /// tools.
+    #[structopt(long = "avoid-type-null")]
+    avoid_type_null: bool,
 }
 
 /// Main entry point. Really just a wrapper for `run` which sets up logging and
@@ -48,7 +56,12 @@ fn main() {
 /// Our real entry point.
 fn run(opt: &Opt) -> Result<()> {
     let openapi = OpenApi::from_path(&opt.input)?;
-    let transpiled = openapi.transpile(&Scope::default())?;
+    let mut scope = Scope::default();
+    if !openapi.supports_type_null() || opt.avoid_type_null {
+        // We don't support `type: "null"`, so don't introduce it.
+        scope.use_generic_merge_patch_types = true;
+    }
+    let transpiled = openapi.transpile(&scope)?;
     if let Some(output_path) = &opt.output {
         let mut out = File::create(output_path)
             .with_context(|| format!("could not create {}", output_path.display()))?;

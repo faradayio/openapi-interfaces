@@ -6,10 +6,12 @@
 //! The types in this file correspond to types in the [OpenAPI 3.1.0
 //! specification](https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md).
 
-use anyhow::{format_err, Context, Result};
+use anyhow::{format_err, Context, Error, Result};
 use log::debug;
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use serde_with::{serde_as, DisplayFromStr};
 use std::io;
 use std::{collections::BTreeMap, fs, path::Path, sync::Arc};
 
@@ -28,9 +30,14 @@ use self::schema::Schema;
 pub use self::transpile::{Scope, Transpile};
 
 /// An OpenAPI file, with our extensions.
+#[serde_as]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenApi {
+    /// OpenAPI version number.
+    #[serde_as(as = "DisplayFromStr")]
+    openapi: Version,
+
     /// REST path declarations.
     paths: BTreeMap<String, BTreeMap<Method, Operation>>,
 
@@ -49,20 +56,36 @@ impl OpenApi {
         let contents = fs::read_to_string(path)
             .with_context(|| format!("error reading {}", display_path))?;
 
-        serde_yaml::from_str(&contents).map_err(|err| {
-            let mut annotations = vec![];
-            if let Some(loc) = err.location() {
-                annotations
-                    .push(Annotation::primary(loc.index(), "error occurred here"));
-            }
-            let parse_error = ParseError::new(
-                Arc::new(FileInfo::new(display_path, contents)),
-                annotations,
-                err.to_string(),
-            );
-            debug!("parse error: {}", parse_error);
-            parse_error.into()
-        })
+        // Parse our YAML.
+        let api =
+            serde_yaml::from_str::<OpenApi>(&contents).map_err(|err| -> Error {
+                let mut annotations = vec![];
+                if let Some(loc) = err.location() {
+                    annotations
+                        .push(Annotation::primary(loc.index(), "error occurred here"));
+                }
+                let parse_error = ParseError::new(
+                    Arc::new(FileInfo::new(display_path, contents)),
+                    annotations,
+                    err.to_string(),
+                );
+                debug!("parse error: {}", parse_error);
+                parse_error.into()
+            })?;
+
+        // Check our version number.
+        let vers_req = VersionReq::parse("^3.0").unwrap();
+        if vers_req.matches(&api.openapi) {
+            Ok(api)
+        } else {
+            Err(format_err!("OpenAPI 3.x supported, found {}", &api.openapi))
+        }
+    }
+
+    /// Can we use `type: "null"` in this OpenAPI file?
+    pub fn supports_type_null(&self) -> bool {
+        let vers_req = VersionReq::parse("^3.1").unwrap();
+        vers_req.matches(&self.openapi)
     }
 
     /// Write an OpenAPI file to `writer`.
@@ -78,6 +101,7 @@ impl Transpile for OpenApi {
 
     fn transpile(&self, scope: &Scope) -> Result<Self> {
         Ok(Self {
+            openapi: self.openapi.clone(),
             paths: self.paths.transpile(scope)?,
             components: self.components.transpile(scope)?,
             unknown_fields: self.unknown_fields.clone(),

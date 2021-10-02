@@ -13,7 +13,7 @@ use topological_sort::TopologicalSort;
 
 use crate::openapi::{
     ref_or::RefOr,
-    schema::{AdditionalProperties, BasicSchema, PrimativeSchema, Type},
+    schema::{AdditionalProperties, BasicSchema, PrimitiveSchema, Type},
     serde_helpers::{default_as_true, deserialize_enum_helper},
 };
 
@@ -301,6 +301,27 @@ impl BasicInterface {
         let mut types = BTreeSet::new();
         types.insert(Type::Object);
 
+        // Check to see whether we should just generate a placeholder.
+        if scope.use_generic_merge_patch_types
+            && variant == InterfaceVariant::MergePatch
+        {
+            let schema = PrimitiveSchema {
+                types,
+                required: vec![],
+                properties: Default::default(),
+                additional_properties: AdditionalProperties::Bool(true),
+                items: None,
+                nullable: None,
+                description: Some(format!(
+                    "A patch to `{}Put` in JSON Merge Patch format (RFC 7396).",
+                    name
+                )),
+                example: None,
+                unknown_fields: BTreeMap::default(),
+            };
+            return Ok(RefOr::Value(BasicSchema::Primitive(Box::new(schema))));
+        }
+
         // Build our properties.
         let mut required = vec![];
         let mut properties = BTreeMap::new();
@@ -350,7 +371,7 @@ impl BasicInterface {
         };
 
         // Build a schema for this interface.
-        let schema = PrimativeSchema {
+        let schema = PrimitiveSchema {
             types,
             required,
             properties,
@@ -363,6 +384,42 @@ impl BasicInterface {
         };
         Ok(RefOr::Value(BasicSchema::Primitive(Box::new(schema))))
     }
+}
+
+#[test]
+fn generates_generic_merge_patch_types_when_necessary() {
+    let mut members = BTreeMap::new();
+    members.insert(
+        "field".to_owned(),
+        Member {
+            required: false,
+            mutable: true,
+            initializable: None,
+            schema: Schema::null(),
+        },
+    );
+    let iface = BasicInterface {
+        emit: true,
+        members,
+        additional_members: None,
+        description: None,
+        example: None,
+    };
+
+    let scope = Scope {
+        use_generic_merge_patch_types: true,
+        ..Scope::default()
+    };
+    let generated = iface
+        .generate_schema_variant(&scope, "Example", InterfaceVariant::MergePatch)
+        .unwrap();
+
+    let expected_yaml = r#"
+type: object
+description: A patch to `ExamplePut` in JSON Merge Patch format (RFC 7396).
+"#;
+    let expected = serde_yaml::from_str(expected_yaml).unwrap();
+    assert_eq!(generated, expected);
 }
 
 /// A member of an interface. Analogous to a property, but with more metadata

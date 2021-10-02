@@ -91,7 +91,7 @@ pub(crate) enum BasicSchema {
     /// A value must match at least one of the specified schemas.
     OneOf(OneOf),
     /// A basic schema containing `type` and additional fields.
-    Primitive(Box<PrimativeSchema>),
+    Primitive(Box<PrimitiveSchema>),
 }
 
 impl<'de> Deserialize<'de> for BasicSchema {
@@ -141,7 +141,7 @@ impl ExpectedWhenParsing for BasicSchema {
 
 impl Nullable for BasicSchema {
     fn null() -> BasicSchema {
-        BasicSchema::Primitive(Box::new(PrimativeSchema::null()))
+        BasicSchema::Primitive(Box::new(PrimitiveSchema::null()))
     }
 
     fn allows_local_null(&self) -> bool {
@@ -266,7 +266,7 @@ impl Transpile for OneOf {
 /// A basic JSON Schema fragment.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PrimativeSchema {
+pub struct PrimitiveSchema {
     /// A set of value types which this schema will match.
     #[serde(rename = "type", with = "scalar_or_vec")]
     pub(crate) types: BTreeSet<Type>,
@@ -306,12 +306,12 @@ pub struct PrimativeSchema {
     pub(crate) unknown_fields: BTreeMap<String, Value>,
 }
 
-impl PrimativeSchema {
+impl PrimitiveSchema {
     /// Construct a `BaseSchema` that matches `null`.
-    fn null() -> PrimativeSchema {
+    fn null() -> PrimitiveSchema {
         let mut types = BTreeSet::new();
         types.insert(Type::Null);
-        PrimativeSchema {
+        PrimitiveSchema {
             types,
             required: Default::default(),
             properties: Default::default(),
@@ -325,7 +325,7 @@ impl PrimativeSchema {
     }
 }
 
-impl Transpile for PrimativeSchema {
+impl Transpile for PrimitiveSchema {
     type Output = Self;
 
     fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
