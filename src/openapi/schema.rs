@@ -42,10 +42,10 @@ impl Nullable for Schema {
     fn allowing_null(&self) -> Schema {
         match self {
             RefOr::Ref(_) | RefOr::InterfaceRef(_) => {
-                RefOr::Value(BasicSchema::OneOf(OneOf {
-                    schemas: vec![self.clone()],
-                    unknown_fields: Default::default(),
-                }))
+                RefOr::Value(BasicSchema::OneOf(OneOf::new(vec![
+                    self.clone(),
+                    Schema::null(),
+                ])))
             }
             RefOr::Value(val) => RefOr::Value(val.allowing_null()),
         }
@@ -57,6 +57,19 @@ impl Nullable for Schema {
             RefOr::Value(value) => value.allows_local_null(),
         }
     }
+}
+
+#[test]
+fn allowing_null_turns_refs_into_oneof() {
+    use super::ref_or::Ref;
+
+    let schema = RefOr::<BasicSchema>::Ref(Ref::new("#/components/schemas/widget"));
+    assert_eq!(
+        schema.allowing_null(),
+        RefOr::Value(BasicSchema::OneOf(OneOf::new(
+            vec![schema, Schema::null(),]
+        )))
+    )
 }
 
 #[test]
@@ -168,10 +181,10 @@ impl Nullable for BasicSchema {
             }
 
             // We have some other schema type, so we'll need to create a `OneOf` node.
-            schema => BasicSchema::OneOf(OneOf {
-                schemas: vec![RefOr::Value(schema.to_owned()), Schema::null()],
-                unknown_fields: Default::default(),
-            }),
+            schema => BasicSchema::OneOf(OneOf::new(vec![
+                RefOr::Value(schema.to_owned()),
+                Schema::null(),
+            ])),
         }
     }
 }
@@ -227,6 +240,16 @@ pub struct OneOf {
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
+}
+
+impl OneOf {
+    /// Create a new `OneOf` schema.
+    fn new(schemas: Vec<Schema>) -> OneOf {
+        OneOf {
+            schemas,
+            unknown_fields: Default::default(),
+        }
+    }
 }
 
 impl Transpile for OneOf {

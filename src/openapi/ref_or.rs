@@ -109,6 +109,16 @@ pub struct Ref {
     unknown_fields: BTreeMap<String, Value>,
 }
 
+impl Ref {
+    /// Construct a ref pointing to `target`.
+    pub(crate) fn new<S: Into<String>>(target: S) -> Ref {
+        Ref {
+            target: target.into(),
+            unknown_fields: Default::default(),
+        }
+    }
+}
+
 impl Transpile for Ref {
     type Output = Self;
 
@@ -161,13 +171,10 @@ impl Transpile for InterfaceRef {
         };
 
         // Build our ref.
-        Ok(Ref {
-            target: format!(
-                "#/components/schemas/{}{}",
-                &self.target[..fragment_pos],
-                variety.to_schema_suffix_str()
-            ),
-            unknown_fields: BTreeMap::new(),
-        })
+        Ok(Ref::new(format!(
+            "#/components/schemas/{}{}",
+            &self.target[..fragment_pos],
+            variety.to_schema_suffix_str()
+        )))
     }
 }
