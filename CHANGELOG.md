@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.0 - 2021-10-02
+
+### Added
+
+- If `--avoid-type-null` is passed, generate `MergePatch` types that with the schema `type: object`. This allows basic compatibility with OpenAPI 3.0, but it skips all merge patch validation.
+- When run on OpenAPI 3.0 files, act as if `--avoid-type-null` were set.
+
+### Changed
+
+- BREAKING: Don't generate schemas that would only match the empty object. For example, if an object has no mutable fields, don't generate the `MergePatch` or `Put` variants.
+
 ## 0.1.3 - 2021-10-02
 
 More fixes for 0.1.1. It looks like we need more regression tests for the corner cases.
