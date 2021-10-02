@@ -34,6 +34,16 @@ pub(crate) trait Nullable {
 /// Different possibilities for a schema.
 pub(crate) type Schema = RefOr<BasicSchema>;
 
+impl Schema {
+    /// Does this schema match only an empty object?
+    pub(crate) fn matches_only_empty_object(&self) -> bool {
+        match self {
+            RefOr::Ref(_) | RefOr::InterfaceRef(_) => false,
+            RefOr::Value(s) => s.matches_only_empty_object(),
+        }
+    }
+}
+
 impl Nullable for Schema {
     fn null() -> Self {
         RefOr::Value(BasicSchema::null())
@@ -92,6 +102,21 @@ pub(crate) enum BasicSchema {
     OneOf(OneOf),
     /// A basic schema containing `type` and additional fields.
     Primitive(Box<PrimitiveSchema>),
+}
+
+impl BasicSchema {
+    /// Does this schema match only an empty object?
+    fn matches_only_empty_object(&self) -> bool {
+        match self {
+            BasicSchema::AllOf(all_of) => {
+                all_of.schemas.iter().any(|s| s.matches_only_empty_object())
+            }
+            BasicSchema::OneOf(one_of) => {
+                one_of.schemas.iter().all(|s| s.matches_only_empty_object())
+            }
+            BasicSchema::Primitive(s) => s.matches_only_empty_object(),
+        }
+    }
 }
 
 impl<'de> Deserialize<'de> for BasicSchema {
@@ -307,6 +332,14 @@ pub struct PrimitiveSchema {
 }
 
 impl PrimitiveSchema {
+    /// Does this schema match only an empty object?
+    fn matches_only_empty_object(&self) -> bool {
+        self.types.contains(&Type::Object)
+            && self.types.len() == 1
+            && self.properties.is_empty()
+            && self.additional_properties == AdditionalProperties::Bool(false)
+    }
+
     /// Construct a `BaseSchema` that matches `null`.
     fn null() -> PrimitiveSchema {
         let mut types = BTreeSet::new();

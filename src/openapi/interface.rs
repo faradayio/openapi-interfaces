@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::{format_err, Context, Result};
 use json_patch::merge as json_merge_patch;
+use log::warn;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use topological_sort::TopologicalSort;
@@ -161,6 +162,15 @@ impl Transpile for Interfaces {
                 let schema_name = interface.schema_variant_name(name, variant);
                 let schema =
                     interface.generate_schema_variant(scope, name, variant)?;
+
+                if schema.matches_only_empty_object() {
+                    warn!(
+                        "output schema {} would match only empty objects, skipping",
+                        schema_name
+                    );
+                    continue;
+                }
+
                 if schemas.insert(schema_name.clone(), schema).is_some() {
                     return Err(format_err!(
                         "generated multiple schemas named {:?}",
