@@ -104,6 +104,11 @@ pub struct Ref {
     #[serde(rename = "$ref")]
     target: String,
 
+    /// An optional human-readable description which overrides whatever is in
+    /// the referenced schema.
+    ///
+    /// See
+    /// [the OpenAPI docs](https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#fixed-fields-19).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
 
@@ -143,6 +148,11 @@ pub struct InterfaceRef {
     #[serde(rename = "$interface")]
     target: String,
 
+    /// An optional human-readable description which overrides whatever is in
+    /// the referenced schema.
+    ///
+    /// See
+    /// [the OpenAPI docs](https://github.com/OAI/OpenAPI-Specification/blob/main/versions/3.1.0.md#fixed-fields-19).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     description: Option<String>,
 
@@ -189,4 +199,23 @@ impl Transpile for InterfaceRef {
             self.description.clone(),
         ))
     }
+}
+
+#[test]
+fn transpile_interface_with_description() {
+    let interface_ref = InterfaceRef {
+        target: "Widget".to_string(),
+        description: Some("hello".to_string()),
+        unknown_fields: Default::default(),
+    };
+
+    let actual_ref = interface_ref.transpile(&Scope::default()).unwrap();
+
+    let expected_ref = Ref {
+        target: "#/components/schemas/Widget".to_string(),
+        description: Some("hello".to_string()),
+        unknown_fields: Default::default(),
+    };
+
+    assert_eq!(actual_ref, expected_ref);
 }
