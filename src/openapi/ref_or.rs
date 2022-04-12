@@ -111,10 +111,13 @@ pub struct Ref {
 
 impl Ref {
     /// Construct a ref pointing to `target`.
-    pub(crate) fn new<S: Into<String>>(target: S) -> Ref {
+    pub(crate) fn new<S: Into<String>>(
+        target: S,
+        unknown_fields: BTreeMap<String, Value>,
+    ) -> Ref {
         Ref {
             target: target.into(),
-            unknown_fields: Default::default(),
+            unknown_fields,
         }
     }
 }
@@ -150,8 +153,14 @@ impl Transpile for InterfaceRef {
 
     fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
         // This type is defined by us, so let's enforce this rule.
-        if !self.unknown_fields.is_empty() {
-            return Err(format_err!("`$include:` must not have any sibling values"));
+        // Only a description field is allowed.
+        if self.unknown_fields.len() > 1
+            || (self.unknown_fields.len() == 1
+                && !self.unknown_fields.contains_key("description"))
+        {
+            return Err(format_err!(
+                "`$interface:` only sibling value allowed is description"
+            ));
         }
 
         // Figure out which interface variant to use.
@@ -171,10 +180,13 @@ impl Transpile for InterfaceRef {
         };
 
         // Build our ref.
-        Ok(Ref::new(format!(
-            "#/components/schemas/{}{}",
-            &self.target[..fragment_pos],
-            variety.to_schema_suffix_str()
-        )))
+        Ok(Ref::new(
+            format!(
+                "#/components/schemas/{}{}",
+                &self.target[..fragment_pos],
+                variety.to_schema_suffix_str()
+            ),
+            self.unknown_fields.clone(),
+        ))
     }
 }
