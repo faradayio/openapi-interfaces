@@ -104,6 +104,9 @@ pub struct Ref {
     #[serde(rename = "$ref")]
     target: String,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
@@ -111,13 +114,11 @@ pub struct Ref {
 
 impl Ref {
     /// Construct a ref pointing to `target`.
-    pub(crate) fn new<S: Into<String>>(
-        target: S,
-        unknown_fields: BTreeMap<String, Value>,
-    ) -> Ref {
+    pub(crate) fn new<S: Into<String>>(target: S, description: Option<String>) -> Ref {
         Ref {
             target: target.into(),
-            unknown_fields,
+            description,
+            unknown_fields: Default::default(),
         }
     }
 }
@@ -127,7 +128,7 @@ impl Transpile for Ref {
 
     fn transpile(&self, _scope: &Scope) -> anyhow::Result<Self::Output> {
         if !self.unknown_fields.is_empty() {
-            return Err(format_err!("`$ref:` must not have any sibling values"));
+            return Err(format_err!("`$ref:` no unknown sibling values allowed"));
         }
 
         Ok(self.clone())
@@ -142,6 +143,9 @@ pub struct InterfaceRef {
     #[serde(rename = "$interface")]
     target: String,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
+
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
@@ -153,13 +157,9 @@ impl Transpile for InterfaceRef {
 
     fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
         // This type is defined by us, so let's enforce this rule.
-        // Only a description field is allowed.
-        if self.unknown_fields.len() > 1
-            || (self.unknown_fields.len() == 1
-                && !self.unknown_fields.contains_key("description"))
-        {
+        if !self.unknown_fields.is_empty() {
             return Err(format_err!(
-                "`$interface:` only sibling value allowed is description"
+                "`$interface:` no unknown sibling values allowed"
             ));
         }
 
@@ -186,7 +186,7 @@ impl Transpile for InterfaceRef {
                 &self.target[..fragment_pos],
                 variety.to_schema_suffix_str()
             ),
-            self.unknown_fields.clone(),
+            self.description.clone(),
         ))
     }
 }

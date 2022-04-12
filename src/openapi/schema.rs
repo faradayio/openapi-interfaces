@@ -73,10 +73,8 @@ impl Nullable for Schema {
 fn allowing_null_turns_refs_into_oneof() {
     use super::ref_or::Ref;
 
-    let schema = RefOr::<BasicSchema>::Ref(Ref::new(
-        "#/components/schemas/widget",
-        BTreeMap::new(),
-    ));
+    let schema =
+        RefOr::<BasicSchema>::Ref(Ref::new("#/components/schemas/widget", None));
     assert_eq!(
         schema.allowing_null(),
         RefOr::Value(BasicSchema::OneOf(OneOf::new(
