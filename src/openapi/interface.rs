@@ -444,7 +444,8 @@ fn generates_generic_merge_patch_types_when_necessary() {
             required: false,
             mutable: true,
             initializable: None,
-            schema: Schema::null(),
+            // Literally any schema would work here.
+            schema: Schema::new_schema_matching_only_null_for_merge_patch(),
         },
     );
     let iface = BasicInterface {
@@ -538,7 +539,7 @@ impl Member {
                     Some(schema)
                 } else {
                     // Optional fields become nullable.
-                    Some(schema.allowing_null_for_merge_patch())
+                    Some(schema.new_schema_matching_current_or_null_for_merge_patch())
                 }
             }
             InterfaceVariant::MergePatch => None,

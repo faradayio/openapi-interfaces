@@ -16,21 +16,20 @@ use super::{
 
 /// Interface for schema types that might be able to match against `null`.
 pub trait Nullable: Sized {
-    /// Construct a simple schema that only allows `null` values.
-    fn null() -> Self;
-
-    /// Like `null`, but it includes special documentation for use in
-    /// `MergePatch` types.
-    fn null_for_merge_patch() -> Self;
+    /// Construct a schema which matches only `null`.
+    ///
+    /// Include documentation fields included that makes the auto-generated
+    /// documentation look nice when used in a `MergePatch`.
+    fn new_schema_matching_only_null_for_merge_patch() -> Self;
 
     /// Construct a version of this schema that has documentation suitable for
     /// use inside `oneOf` inside a `MergePatch` type, and return the original
     /// `description` if any.
-    fn with_merge_patch_documentation(&self) -> (Self, Option<String>);
+    fn new_schema_with_merge_patch_documentation(&self) -> (Self, Option<String>);
 
     /// Construct a version of this schema that allows `null`, as well as any
     /// other values it might have allowed before.
-    fn allowing_null_for_merge_patch(&self) -> Self;
+    fn new_schema_matching_current_or_null_for_merge_patch(&self) -> Self;
 
     /// (Normally internal.) Does this schema allow a null value without
     /// resolving `$ref` or `$interface` links?
@@ -54,28 +53,27 @@ impl Schema {
 }
 
 impl Nullable for Schema {
-    fn null() -> Self {
-        RefOr::Value(BasicSchema::null())
+    fn new_schema_matching_only_null_for_merge_patch() -> Self {
+        RefOr::Value(BasicSchema::new_schema_matching_only_null_for_merge_patch())
     }
 
-    fn null_for_merge_patch() -> Self {
-        RefOr::Value(BasicSchema::null_for_merge_patch())
-    }
-
-    fn allowing_null_for_merge_patch(&self) -> Schema {
+    fn new_schema_matching_current_or_null_for_merge_patch(&self) -> Schema {
         match self {
             RefOr::Ref(_) | RefOr::InterfaceRef(_) => RefOr::Value(
                 BasicSchema::OneOf(OneOf::new_schema_or_null_for_merge_patch(self)),
             ),
-            RefOr::Value(val) => RefOr::Value(val.allowing_null_for_merge_patch()),
+            RefOr::Value(val) => {
+                RefOr::Value(val.new_schema_matching_current_or_null_for_merge_patch())
+            }
         }
     }
 
-    fn with_merge_patch_documentation(&self) -> (Self, Option<String>) {
+    fn new_schema_with_merge_patch_documentation(&self) -> (Self, Option<String>) {
         match self {
             RefOr::Ref(_) | RefOr::InterfaceRef(_) => (self.clone(), None),
             RefOr::Value(val) => {
-                let (schema, description) = val.with_merge_patch_documentation();
+                let (schema, description) =
+                    val.new_schema_with_merge_patch_documentation();
                 (RefOr::Value(schema), description)
             }
         }
@@ -96,9 +94,12 @@ fn allowing_null_turns_refs_into_oneof() {
     let schema =
         RefOr::<BasicSchema>::Ref(Ref::new("#/components/schemas/widget", None));
     assert_eq!(
-        schema.allowing_null_for_merge_patch(),
+        schema.new_schema_matching_current_or_null_for_merge_patch(),
         RefOr::Value(BasicSchema::OneOf(OneOf {
-            schemas: vec![schema, Schema::null_for_merge_patch()],
+            schemas: vec![
+                schema,
+                Schema::new_schema_matching_only_null_for_merge_patch()
+            ],
             description: None,
             discriminator: None,
             unknown_fields: Default::default(),
@@ -189,15 +190,11 @@ impl ExpectedWhenParsing for BasicSchema {
 }
 
 impl Nullable for BasicSchema {
-    fn null() -> BasicSchema {
-        BasicSchema::Primitive(Box::new(PrimitiveSchema::null()))
-    }
-
-    fn null_for_merge_patch() -> Self {
+    fn new_schema_matching_only_null_for_merge_patch() -> Self {
         BasicSchema::Primitive(Box::new(PrimitiveSchema::null_for_merge_patch()))
     }
 
-    fn with_merge_patch_documentation(&self) -> (Self, Option<String>) {
+    fn new_schema_with_merge_patch_documentation(&self) -> (Self, Option<String>) {
         match self {
             BasicSchema::AllOf(_) | BasicSchema::OneOf(_) => (self.clone(), None),
             BasicSchema::Primitive(base) => {
@@ -219,7 +216,7 @@ impl Nullable for BasicSchema {
         }
     }
 
-    fn allowing_null_for_merge_patch(&self) -> BasicSchema {
+    fn new_schema_matching_current_or_null_for_merge_patch(&self) -> BasicSchema {
         match self {
             // We already allow `null` (without following refs), so do nothing.
             schema if schema.allows_local_null() => schema.to_owned(),
@@ -239,7 +236,9 @@ impl Nullable for BasicSchema {
             // We have a `OneOf` schema, so just add `null` **at the end**.
             BasicSchema::OneOf(one_of) => {
                 let mut one_of = one_of.to_owned();
-                one_of.schemas.push(Schema::null_for_merge_patch());
+                one_of
+                    .schemas
+                    .push(Schema::new_schema_matching_only_null_for_merge_patch());
                 BasicSchema::OneOf(one_of)
             }
 
@@ -316,8 +315,11 @@ impl OneOf {
     /// set up the `description` and `title` fields on everything in a way that
     /// looks good in a merge patch type.
     fn new_schema_or_null_for_merge_patch(schema: &Schema) -> OneOf {
-        let (schema, description) = schema.with_merge_patch_documentation();
-        let schemas = vec![schema, Schema::null_for_merge_patch()];
+        let (schema, description) = schema.new_schema_with_merge_patch_documentation();
+        let schemas = vec![
+            schema,
+            Schema::new_schema_matching_only_null_for_merge_patch(),
+        ];
         OneOf {
             schemas,
             description,
