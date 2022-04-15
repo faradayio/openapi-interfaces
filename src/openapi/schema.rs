@@ -15,13 +15,22 @@ use super::{
 };
 
 /// Interface for schema types that might be able to match against `null`.
-pub trait Nullable {
+pub trait Nullable: Sized {
     /// Construct a simple schema that only allows `null` values.
     fn null() -> Self;
 
+    /// Like `null`, but it includes special documentation for use in
+    /// `MergePatch` types.
+    fn null_for_merge_patch() -> Self;
+
+    /// Construct a version of this schema that has documentation suitable for
+    /// use inside `oneOf` inside a `MergePatch` type, and return the original
+    /// `description` if any.
+    fn with_merge_patch_documentation(&self) -> (Self, Option<String>);
+
     /// Construct a version of this schema that allows `null`, as well as any
     /// other values it might have allowed before.
-    fn allowing_null(&self) -> Self;
+    fn allowing_null_for_merge_patch(&self) -> Self;
 
     /// (Normally internal.) Does this schema allow a null value without
     /// resolving `$ref` or `$interface` links?
@@ -49,15 +58,26 @@ impl Nullable for Schema {
         RefOr::Value(BasicSchema::null())
     }
 
-    fn allowing_null(&self) -> Schema {
+    fn null_for_merge_patch() -> Self {
+        RefOr::Value(BasicSchema::null_for_merge_patch())
+    }
+
+    fn allowing_null_for_merge_patch(&self) -> Schema {
         match self {
-            RefOr::Ref(_) | RefOr::InterfaceRef(_) => {
-                RefOr::Value(BasicSchema::OneOf(OneOf::new(vec![
-                    self.clone(),
-                    Schema::null(),
-                ])))
+            RefOr::Ref(_) | RefOr::InterfaceRef(_) => RefOr::Value(
+                BasicSchema::OneOf(OneOf::new_schema_or_null_for_merge_patch(self)),
+            ),
+            RefOr::Value(val) => RefOr::Value(val.allowing_null_for_merge_patch()),
+        }
+    }
+
+    fn with_merge_patch_documentation(&self) -> (Self, Option<String>) {
+        match self {
+            RefOr::Ref(_) | RefOr::InterfaceRef(_) => (self.clone(), None),
+            RefOr::Value(val) => {
+                let (schema, description) = val.with_merge_patch_documentation();
+                (RefOr::Value(schema), description)
             }
-            RefOr::Value(val) => RefOr::Value(val.allowing_null()),
         }
     }
 
@@ -76,10 +96,13 @@ fn allowing_null_turns_refs_into_oneof() {
     let schema =
         RefOr::<BasicSchema>::Ref(Ref::new("#/components/schemas/widget", None));
     assert_eq!(
-        schema.allowing_null(),
-        RefOr::Value(BasicSchema::OneOf(OneOf::new(
-            vec![schema, Schema::null(),]
-        )))
+        schema.allowing_null_for_merge_patch(),
+        RefOr::Value(BasicSchema::OneOf(OneOf {
+            schemas: vec![schema, Schema::null_for_merge_patch()],
+            description: None,
+            discriminator: None,
+            unknown_fields: Default::default(),
+        }))
     )
 }
 
@@ -170,6 +193,20 @@ impl Nullable for BasicSchema {
         BasicSchema::Primitive(Box::new(PrimitiveSchema::null()))
     }
 
+    fn null_for_merge_patch() -> Self {
+        BasicSchema::Primitive(Box::new(PrimitiveSchema::null_for_merge_patch()))
+    }
+
+    fn with_merge_patch_documentation(&self) -> (Self, Option<String>) {
+        match self {
+            BasicSchema::AllOf(_) | BasicSchema::OneOf(_) => (self.clone(), None),
+            BasicSchema::Primitive(base) => {
+                let (base, description) = base.with_merge_patch_documentation();
+                (BasicSchema::Primitive(Box::new(base)), description)
+            }
+        }
+    }
+
     fn allows_local_null(&self) -> bool {
         match self {
             BasicSchema::AllOf(all_of) => {
@@ -182,7 +219,7 @@ impl Nullable for BasicSchema {
         }
     }
 
-    fn allowing_null(&self) -> BasicSchema {
+    fn allowing_null_for_merge_patch(&self) -> BasicSchema {
         match self {
             // We already allow `null` (without following refs), so do nothing.
             schema if schema.allows_local_null() => schema.to_owned(),
@@ -202,15 +239,14 @@ impl Nullable for BasicSchema {
             // We have a `OneOf` schema, so just add `null` **at the end**.
             BasicSchema::OneOf(one_of) => {
                 let mut one_of = one_of.to_owned();
-                one_of.schemas.push(Schema::null());
+                one_of.schemas.push(Schema::null_for_merge_patch());
                 BasicSchema::OneOf(one_of)
             }
 
             // We have some other schema type, so we'll need to create a `OneOf` node.
-            schema => BasicSchema::OneOf(OneOf::new(vec![
-                RefOr::Value(schema.to_owned()),
-                Schema::null(),
-            ])),
+            _ => BasicSchema::OneOf(OneOf::new_schema_or_null_for_merge_patch(
+                &RefOr::Value(self.to_owned()),
+            )),
         }
     }
 }
@@ -263,6 +299,10 @@ pub struct OneOf {
     #[serde(rename = "oneOf")]
     pub schemas: Vec<Schema>,
 
+    /// Optional description of the schema.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
     /// How to differentiate between our child schemas.
     pub discriminator: Option<Discriminator>,
 
@@ -272,10 +312,15 @@ pub struct OneOf {
 }
 
 impl OneOf {
-    /// Create a new `OneOf` schema.
-    fn new(schemas: Vec<Schema>) -> OneOf {
+    /// Create a `oneOf` schema allowing either `schema` or a `null` value, and
+    /// set up the `description` and `title` fields on everything in a way that
+    /// looks good in a merge patch type.
+    fn new_schema_or_null_for_merge_patch(schema: &Schema) -> OneOf {
+        let (schema, description) = schema.with_merge_patch_documentation();
+        let schemas = vec![schema, Schema::null_for_merge_patch()];
         OneOf {
             schemas,
+            description,
             discriminator: None,
             unknown_fields: Default::default(),
         }
@@ -288,6 +333,7 @@ impl Transpile for OneOf {
     fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
         Ok(Self {
             schemas: self.schemas.transpile(scope)?,
+            description: self.description.clone(),
             discriminator: self.discriminator.clone(),
             unknown_fields: self.unknown_fields.clone(),
         })
@@ -343,6 +389,10 @@ pub struct PrimitiveSchema {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
+    /// A title, typically used to label the choices in a `oneOf`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+
     /// Example data for this type.
     ///
     /// TODO: We'll need multiple versions for different variants, sadly.
@@ -375,9 +425,38 @@ impl PrimitiveSchema {
             items: Default::default(),
             nullable: None,
             description: Default::default(),
+            title: Default::default(),
             example: Default::default(),
             unknown_fields: Default::default(),
         }
+    }
+
+    /// Create a version of the schema returned by [`Self::null()`], but with
+    /// special `title` and `description` fields for use when we're injecting
+    /// `null` support into `MergePatch` types.
+    fn null_for_merge_patch() -> Self {
+        let mut null_schema = Self::null();
+        null_schema.title = Some("Clear".to_owned());
+        null_schema.description =
+            Some("Pass `null` to clear this field's existing value.".to_owned());
+        null_schema
+    }
+
+    /// Construct a version of this schema for use in a `oneOf` variant inside
+    /// of a `MergePatch`. This involves adding some fields that look nice in
+    /// the generated API docs, and changing the description.
+    ///
+    /// We return the old description.
+    fn with_merge_patch_documentation(&self) -> (Self, Option<String>) {
+        // "The name of this widget.",
+        // "Pass this value to overwrite the existing value.",
+        // title: None,
+        // title: Some("Overwrite"
+        let mut merge_patch_schema = self.clone();
+        merge_patch_schema.title = Some("Overwrite".to_owned());
+        merge_patch_schema.description =
+            Some("Pass this value to overwrite the existing value.".to_owned());
+        (merge_patch_schema, self.description.clone())
     }
 }
 
@@ -399,6 +478,7 @@ impl Transpile for PrimitiveSchema {
             items: self.items.transpile(scope)?,
             nullable: None,
             description: self.description.clone(),
+            title: self.title.clone(),
             example: self.example.clone(),
             unknown_fields: self.unknown_fields.clone(),
         })
