@@ -88,7 +88,7 @@ components:
     WidgetMergePatch: ...
 ```
 
-For the complete definitions, see [`example_output.yml`](./example_output.yml).
+For the complete definitions, see [`example_output.yml`](./examples/example_output.yml).
 
 ### Referring to interfaces
 

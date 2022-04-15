@@ -1,0 +1,137 @@
+# AUTOMATICALLY GENERATED. DO NOT EDIT.
+---
+paths: {}
+components:
+  schemas:
+    ShapeOptions:
+      oneOf:
+        - $ref: "#/components/schemas/SquareShapeOptions"
+        - $ref: "#/components/schemas/RoundShapeOptions"
+      discriminator:
+        propertyName: type
+        mapping:
+          square: "#/components/schemas/SquareShapeOptions"
+          round: "#/components/schemas/RoundShapeOptions"
+
+    ShapeOptionsMergePatch:
+      oneOf:
+        - $ref: "#/components/schemas/SquareShapeOptionsMergePatch"
+        - $ref: "#/components/schemas/RoundShapeOptionsMergePatch"
+      discriminator:
+        propertyName: type
+        mapping:
+          square: "#/components/schemas/SquareShapeOptionsMergePatch"
+          round: "#/components/schemas/RoundShapeOptionsMergePatch"
+
+    ShapeOptionsPost:
+      oneOf:
+        - $ref: "#/components/schemas/SquareShapeOptionsPost"
+        - $ref: "#/components/schemas/RoundShapeOptionsPost"
+      discriminator:
+        propertyName: type
+        mapping:
+          square: "#/components/schemas/SquareShapeOptionsPost"
+          round: "#/components/schemas/RoundShapeOptionsPost"
+
+    ShapeOptionsPut:
+      oneOf:
+        - $ref: "#/components/schemas/SquareShapeOptionsPut"
+        - $ref: "#/components/schemas/RoundShapeOptionsPut"
+      discriminator:
+        propertyName: type
+        mapping:
+          square: "#/components/schemas/SquareShapeOptionsPut"
+          round: "#/components/schemas/RoundShapeOptionsPut"
+
+    RoundShapeOptions:
+      type: object
+      required:
+        - radius
+        - type
+      properties:
+        radius:
+          type: number
+        type:
+          type: string
+          example: round
+      additionalProperties: false
+    RoundShapeOptionsMergePatch:
+      type: object
+      properties:
+        radius:
+          type: number
+      additionalProperties: false
+    RoundShapeOptionsPost:
+      type: object
+      required:
+        - radius
+        - type
+      properties:
+        radius:
+          type: number
+        type:
+          type: string
+          example: round
+      additionalProperties: false
+    RoundShapeOptionsPut:
+      type: object
+      required:
+        - radius
+      properties:
+        radius:
+          type: number
+      additionalProperties: false
+
+    SquareShapeOptions:
+      type: object
+      required:
+        - height
+        - type
+        - width
+      properties:
+        height:
+          type: number
+        type:
+          type: string
+          example: square
+        width:
+          type: number
+      additionalProperties: false
+    SquareShapeOptionsMergePatch:
+      type: object
+      properties:
+        height:
+          type: number
+        width:
+          type: number
+      additionalProperties: false
+    SquareShapeOptionsPost:
+      type: object
+      required:
+        - height
+        - type
+        - width
+      properties:
+        height:
+          type: number
+        type:
+          type: string
+          example: square
+        width:
+          type: number
+      additionalProperties: false
+    SquareShapeOptionsPut:
+      type: object
+      required:
+        - height
+        - width
+      properties:
+        height:
+          type: number
+        width:
+          type: number
+      additionalProperties: false
+
+info:
+  title: Example OpenAPI definition
+openapi: 3.1.0

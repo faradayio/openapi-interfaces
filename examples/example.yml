@@ -10,9 +10,9 @@ paths:
         required: true
         content:
           application/json:
-              schema:
-                # This becomes `$ref: "#/components/schemas/WidgetPost`.
-                $interface: "Widget#Post"
+            schema:
+              # This becomes `$ref: "#/components/schemas/WidgetPost`.
+              $interface: "Widget#Post"
       responses:
         201:
           content:

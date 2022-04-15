@@ -15,7 +15,7 @@ use super::{
 };
 
 /// Interface for schema types that might be able to match against `null`.
-pub(crate) trait Nullable {
+pub trait Nullable {
     /// Construct a simple schema that only allows `null` values.
     fn null() -> Self;
 
@@ -32,11 +32,11 @@ pub(crate) trait Nullable {
 }
 
 /// Different possibilities for a schema.
-pub(crate) type Schema = RefOr<BasicSchema>;
+pub type Schema = RefOr<BasicSchema>;
 
 impl Schema {
     /// Does this schema match only an empty object?
-    pub(crate) fn matches_only_empty_object(&self) -> bool {
+    pub fn matches_only_empty_object(&self) -> bool {
         match self {
             RefOr::Ref(_) | RefOr::InterfaceRef(_) => false,
             RefOr::Value(s) => s.matches_only_empty_object(),
@@ -96,7 +96,7 @@ items:
 /// Different possibilities for a schema.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
-pub(crate) enum BasicSchema {
+pub enum BasicSchema {
     /// A value must match all of the specified schemas.
     AllOf(AllOf),
     /// A value must match at least one of the specified schemas.
@@ -261,11 +261,14 @@ impl Transpile for AllOf {
 pub struct OneOf {
     /// Our child schemas.
     #[serde(rename = "oneOf")]
-    schemas: Vec<Schema>,
+    pub schemas: Vec<Schema>,
+
+    /// How to differentiate between our child schemas.
+    pub discriminator: Option<Discriminator>,
 
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
-    unknown_fields: BTreeMap<String, Value>,
+    pub unknown_fields: BTreeMap<String, Value>,
 }
 
 impl OneOf {
@@ -273,6 +276,7 @@ impl OneOf {
     fn new(schemas: Vec<Schema>) -> OneOf {
         OneOf {
             schemas,
+            discriminator: None,
             unknown_fields: Default::default(),
         }
     }
@@ -284,9 +288,27 @@ impl Transpile for OneOf {
     fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
         Ok(Self {
             schemas: self.schemas.transpile(scope)?,
+            discriminator: self.discriminator.clone(),
             unknown_fields: self.unknown_fields.clone(),
         })
     }
+}
+
+/// Information about the discriminator for a `OneOf`.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Discriminator {
+    /// The property name that distinguishes the types.
+    pub property_name: String,
+
+    /// If the values in the field specified by `property_name` do not match the
+    /// names of the schemas, you can override them using `mapping`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub mapping: BTreeMap<String, String>,
+
+    /// YAML fields we want to pass through blindly.
+    #[serde(flatten)]
+    pub unknown_fields: BTreeMap<String, Value>,
 }
 
 /// A basic JSON Schema fragment.
@@ -295,41 +317,41 @@ impl Transpile for OneOf {
 pub struct PrimitiveSchema {
     /// A set of value types which this schema will match.
     #[serde(rename = "type", with = "scalar_or_vec")]
-    pub(crate) types: BTreeSet<Type>,
+    pub types: BTreeSet<Type>,
 
     /// For `Type::Object`, a list of properties which must always be present.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(crate) required: Vec<String>,
+    pub required: Vec<String>,
 
     /// For `Type::Object`, a list of property schemas.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub(crate) properties: BTreeMap<String, Schema>,
+    pub properties: BTreeMap<String, Schema>,
 
     /// A schema describing any additional properties not in `properties`.
     #[serde(default, skip_serializing_if = "AdditionalProperties::is_default")]
-    pub(crate) additional_properties: AdditionalProperties,
+    pub additional_properties: AdditionalProperties,
 
     /// Array item type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) items: Option<Schema>,
+    pub items: Option<Schema>,
 
     /// Older OpenAPI way of specifying nullable fields.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) nullable: Option<bool>,
+    pub nullable: Option<bool>,
 
     /// A description of this type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) description: Option<String>,
+    pub description: Option<String>,
 
     /// Example data for this type.
     ///
     /// TODO: We'll need multiple versions for different variants, sadly.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) example: Option<Value>,
+    pub example: Option<Value>,
 
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
-    pub(crate) unknown_fields: BTreeMap<String, Value>,
+    pub unknown_fields: BTreeMap<String, Value>,
 }
 
 impl PrimitiveSchema {
@@ -401,7 +423,7 @@ pub enum Type {
 /// An `additionalProperties` value.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
-pub(crate) enum AdditionalProperties {
+pub enum AdditionalProperties {
     /// `true` (allowing any property) or `false` (allowing none).
     Bool(bool),
     /// All unknown property values must match the specified schema.

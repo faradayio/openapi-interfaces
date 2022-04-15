@@ -310,10 +310,11 @@ impl Transpile for MediaType {
 fn parses_example() {
     use pretty_assertions::assert_eq;
 
-    let parsed = OpenApi::from_path(Path::new("./example.yml")).unwrap();
+    let parsed = OpenApi::from_path(Path::new("./examples/example.yml")).unwrap();
     //println!("{:#?}", parsed);
     let transpiled = parsed.transpile(&Scope::default()).unwrap();
-    let expected = OpenApi::from_path(Path::new("./example_output.yml")).unwrap();
+    let expected =
+        OpenApi::from_path(Path::new("./examples/example_output.yml")).unwrap();
     assert_eq!(transpiled, expected);
 }
 
@@ -321,12 +322,10 @@ fn parses_example() {
 fn parses_long_example() {
     use pretty_assertions::assert_eq;
 
-    let parsed =
-        OpenApi::from_path(Path::new("./src/openapi/long_example.yml")).unwrap();
+    let parsed = OpenApi::from_path(Path::new("./examples/long_example.yml")).unwrap();
     //println!("{:#?}", parsed);
     let transpiled = parsed.transpile(&Scope::default()).unwrap();
     let expected =
-        OpenApi::from_path(Path::new("./src/openapi/long_example_output.yml"))
-            .unwrap();
+        OpenApi::from_path(Path::new("./examples/long_example_output.yml")).unwrap();
     assert_eq!(transpiled, expected);
 }

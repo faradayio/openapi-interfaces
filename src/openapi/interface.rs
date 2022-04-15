@@ -19,7 +19,8 @@ use crate::openapi::{
 };
 
 use super::{
-    schema::{Nullable, Schema},
+    ref_or::transpile_interface_ref_to_ref,
+    schema::{Discriminator, Nullable, OneOf, Schema},
     Scope, Transpile,
 };
 
@@ -94,7 +95,7 @@ impl FromStr for InterfaceVariant {
 /// implementation.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
-pub(crate) struct Interfaces(BTreeMap<String, Interface>);
+pub struct Interfaces(BTreeMap<String, Interface>);
 
 impl Interfaces {
     /// Is the `interfaces` section empty?
@@ -126,7 +127,9 @@ impl Transpile for Interfaces {
         }
 
         // Expand `$includes` using JSON Merge Patch.
-        let mut expanded = BTreeMap::new();
+        let mut expanded: BTreeMap<&str, BasicInterface> = BTreeMap::new();
+        let mut to_generate: BTreeMap<&str, Box<dyn GenerateSchemaVariant>> =
+            BTreeMap::new();
         for name in sort {
             let interface = self
                 .0
@@ -143,10 +146,15 @@ impl Transpile for Interfaces {
                         format!("error parsing merged {:?}", name)
                     })?;
                     reparsed.emit = inclusion.emit; // This is never merged.
-                    expanded.insert(name, reparsed);
+                    expanded.insert(name, reparsed.clone());
+                    to_generate.insert(name, Box::new(reparsed));
                 }
                 Interface::Basic(base) => {
                     expanded.insert(name, base.clone());
+                    to_generate.insert(name, Box::new(base.clone()));
+                }
+                Interface::OneOf(one_of) => {
+                    to_generate.insert(name, Box::new(one_of.clone()));
                 }
             }
         }
@@ -154,8 +162,8 @@ impl Transpile for Interfaces {
         // Generate schemas for all variants of all interfaces unless indicated
         // otherwise.
         let mut schemas = BTreeMap::new();
-        for (name, interface) in expanded {
-            if !interface.emit {
+        for (name, interface) in to_generate {
+            if !interface.should_emit() {
                 continue;
             }
             for variant in INTERFACE_VARIANTS.iter().cloned() {
@@ -195,6 +203,9 @@ pub enum Interface {
     Includes(IncludesInterface),
     /// A fully-resolved interface definition.
     Basic(BasicInterface),
+    /// An type-union interface. This exists so it can use `$interface:
+    /// ...#SameAsInterface` in a type union.
+    OneOf(OneOfInterface),
 }
 
 impl<'de> Deserialize<'de> for Interface {
@@ -210,9 +221,15 @@ impl<'de> Deserialize<'de> for Interface {
 
         // Look for `$includes`.
         let includes_key = Value::String(String::from("$includes"));
+        let oneof_key = Value::String(String::from("oneOf"));
         if yaml.contains_key(&includes_key) {
             Ok(Interface::Includes(deserialize_enum_helper::<D, _>(
                 "`$includes` interface",
+                yaml,
+            )?))
+        } else if yaml.contains_key(&oneof_key) {
+            Ok(Interface::OneOf(deserialize_enum_helper::<D, _>(
+                "oneOf interface",
                 yaml,
             )?))
         } else {
@@ -222,6 +239,27 @@ impl<'de> Deserialize<'de> for Interface {
             )?))
         }
     }
+}
+
+/// Methods used to compile interfaces into multiple schemas.
+trait GenerateSchemaVariant {
+    /// Should be emit this schema in our output file?
+    fn should_emit(&self) -> bool {
+        true
+    }
+
+    /// What name should we use for the specified variant of this schema?
+    fn schema_variant_name(&self, name: &str, variant: InterfaceVariant) -> String {
+        format!("{}{}", name, variant.to_schema_suffix_str())
+    }
+
+    /// Generate a specific schema variant from this interface.
+    fn generate_schema_variant(
+        &self,
+        scope: &Scope,
+        name: &str,
+        variant: InterfaceVariant,
+    ) -> Result<Schema>;
 }
 
 /// An interface which `$includes` another.
@@ -294,10 +332,9 @@ pub struct BasicInterface {
     example: Option<Value>,
 }
 
-impl BasicInterface {
-    /// What name should we use for the specified variant of this schema?
-    fn schema_variant_name(&self, name: &str, variant: InterfaceVariant) -> String {
-        format!("{}{}", name, variant.to_schema_suffix_str())
+impl GenerateSchemaVariant for BasicInterface {
+    fn should_emit(&self) -> bool {
+        self.emit
     }
 
     /// Generate a specific schema variant from this interface.
@@ -505,4 +542,100 @@ impl Member {
             InterfaceVariant::MergePatch => None,
         })
     }
+}
+
+/// An interface which specifies a discriminated type union.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OneOfInterface {
+    /// A description of this type.
+    #[serde(default)]
+    description: Option<String>,
+
+    /// Allowable types that can be used for this interface.
+    one_of: Vec<Schema>,
+
+    /// How to tell the allowable types apart.
+    discriminator: InterfaceDiscriminator,
+}
+
+impl GenerateSchemaVariant for OneOfInterface {
+    fn generate_schema_variant(
+        &self,
+        scope: &Scope,
+        _name: &str,
+        variant: InterfaceVariant,
+    ) -> Result<Schema> {
+        let scope = scope.with_variant(variant);
+
+        let schemas = self
+            .one_of
+            .iter()
+            .map(|schema| schema.transpile(&scope))
+            .collect::<Result<Vec<_>>>()?;
+
+        let discriminator = Some(self.discriminator.transpile(&scope)?);
+
+        Ok(Schema::Value(BasicSchema::OneOf(OneOf {
+            schemas,
+            discriminator,
+            unknown_fields: Default::default(),
+        })))
+    }
+}
+
+/// Information about the discriminator for a `OneOfInterface`.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct InterfaceDiscriminator {
+    /// The property name that distinguishes the types.
+    property_name: String,
+
+    /// If the values in the field specified by `property_name` do not match the
+    /// names of the schemas, you can override them using `mapping`.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    mapping: BTreeMap<String, String>,
+}
+
+impl Transpile for InterfaceDiscriminator {
+    type Output = Discriminator;
+
+    fn transpile(&self, scope: &Scope) -> Result<Self::Output> {
+        // Convert a map like:
+        //
+        //     "square": "SquareShapeOptions#SameAsInterface"
+        //
+        // To a map like:
+        //
+        //     "square": "#/components/schemas/SquareShapeOptions"
+        let mut mapping = BTreeMap::new();
+        for (property_value, interface_ref) in self.mapping.iter() {
+            mapping.insert(
+                property_value.clone(),
+                transpile_interface_ref_to_ref(interface_ref, scope)?,
+            );
+        }
+
+        Ok(Discriminator {
+            property_name: self.property_name.clone(),
+            mapping,
+            unknown_fields: Default::default(),
+        })
+    }
+}
+
+#[test]
+fn parses_one_of_example() {
+    use crate::openapi::OpenApi;
+    use pretty_assertions::assert_eq;
+    use std::path::Path;
+
+    let parsed =
+        OpenApi::from_path(Path::new("./examples/oneof_example.yml")).unwrap();
+    //println!("{:#?}", parsed);
+    let transpiled = parsed.transpile(&Scope::default()).unwrap();
+    println!("{}", serde_yaml::to_string(&transpiled).unwrap());
+    let expected =
+        OpenApi::from_path(Path::new("./examples/oneof_example_output.yml")).unwrap();
+    assert_eq!(transpiled, expected);
 }

@@ -16,20 +16,20 @@ use termcolor::NoColor;
 
 /// An error occurred processing the schema.
 #[derive(Debug)]
-pub(crate) struct ParseError {
+pub struct ParseError {
     /// The source file in which the error occurred.
     file_info: Arc<FileInfo>,
 
     /// The location of the error.
-    pub(crate) annotations: Vec<Annotation>,
+    pub annotations: Vec<Annotation>,
 
     /// The error message to display.
-    pub(crate) message: String,
+    pub message: String,
 }
 
 impl ParseError {
     /// Construct a parse error from an input file.
-    pub(crate) fn new<M: Into<String>>(
+    pub fn new<M: Into<String>>(
         file_info: Arc<FileInfo>,
         annotations: Vec<Annotation>,
         message: M,
@@ -79,36 +79,36 @@ impl StdError for ParseError {}
 
 /// Information about a file we attempted to parse.
 #[derive(Debug)]
-pub(crate) struct FileInfo {
+pub struct FileInfo {
     /// The name of the file.
-    pub(crate) name: String,
+    pub name: String,
     /// The data of the file.
-    pub(crate) contents: String,
+    pub contents: String,
 }
 
 impl FileInfo {
     /// Create a new `FileInfo`.
-    pub(crate) fn new(name: String, contents: String) -> Self {
+    pub fn new(name: String, contents: String) -> Self {
         Self { name, contents }
     }
 }
 
 /// An annotation pointing at a particular part of our input.
 #[derive(Debug)]
-pub(crate) struct Annotation {
+pub struct Annotation {
     /// What type of annotation is this?
-    pub(crate) ty: AnnotationType,
+    pub ty: AnnotationType,
 
     /// What location are we annotating?
-    pub(crate) location: Location,
+    pub location: Location,
 
     /// The message to display for this annotation.
-    pub(crate) message: String,
+    pub message: String,
 }
 
 impl Annotation {
     /// Create a primary annotation which shows the main location of the error.
-    pub(crate) fn primary<L, M>(location: L, message: M) -> Self
+    pub fn primary<L, M>(location: L, message: M) -> Self
     where
         L: Into<Location>,
         M: Into<String>,
@@ -121,7 +121,7 @@ impl Annotation {
     }
 
     /// Create a secondary annotation that shows another location related to the error.
-    pub(crate) fn secondary<L, M>(location: L, message: M) -> Self
+    pub fn secondary<L, M>(location: L, message: M) -> Self
     where
         L: Into<Location>,
         M: Into<String>,
@@ -136,7 +136,7 @@ impl Annotation {
 
 /// What type of annotation are we displaying?
 #[derive(Debug)]
-pub(crate) enum AnnotationType {
+pub enum AnnotationType {
     /// This the main source location associated with the error.
     Primary,
     /// This is a secondary source location associated with the error.
@@ -145,7 +145,7 @@ pub(crate) enum AnnotationType {
 
 /// The location where an error occurred.
 #[derive(Debug)]
-pub(crate) enum Location {
+pub enum Location {
     /// This error occurred as a specific place in the source code.
     Position(usize),
     /// This error occurred at a span in the source code.

@@ -12,7 +12,7 @@ use super::{
 };
 
 /// Support for better error messages when parsing.
-pub(crate) trait ExpectedWhenParsing {
+pub trait ExpectedWhenParsing {
     /// A string describing what type of value we expect when parsing a type
     /// that implements this interface.
     fn expected_when_parsing() -> &'static str;
@@ -21,7 +21,7 @@ pub(crate) trait ExpectedWhenParsing {
 /// Either a $ref, an $interface or a value of type T.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
-pub(crate) enum RefOr<T>
+pub enum RefOr<T>
 where
     T: Clone + Debug + Eq + PartialEq + Serialize,
 {
@@ -119,7 +119,7 @@ pub struct Ref {
 
 impl Ref {
     /// Construct a ref pointing to `target`.
-    pub(crate) fn new<S: Into<String>>(target: S, description: Option<String>) -> Ref {
+    pub fn new<S: Into<String>>(target: S, description: Option<String>) -> Ref {
         Ref {
             target: target.into(),
             description,
@@ -174,31 +174,40 @@ impl Transpile for InterfaceRef {
         }
 
         // Figure out which interface variant to use.
-        let fragment_pos = self.target.find('#').unwrap_or_else(|| self.target.len());
-        let fragment = &self.target[fragment_pos..];
-        let variety = if fragment == "#SameAsInterface" {
-            // Get the interface variant from the surrounding scope.
-            if let Some(variant) = scope.variant {
-                variant
-            } else {
-                return Err(format_err!(
-                    "cannot use #SameAsInterface outside of a `components.interfaces` declaration"
-                ));
-            }
-        } else {
-            self.target[fragment_pos..].parse::<InterfaceVariant>()?
-        };
+        let target = transpile_interface_ref_to_ref(&self.target, scope)?;
 
         // Build our ref.
-        Ok(Ref::new(
-            format!(
-                "#/components/schemas/{}{}",
-                &self.target[..fragment_pos],
-                variety.to_schema_suffix_str()
-            ),
-            self.description.clone(),
-        ))
+        Ok(Ref::new(target, self.description.clone()))
     }
+}
+
+/// Convert the value of an `$interface` to the body of a `$ref`.
+pub fn transpile_interface_ref_to_ref(
+    interface_ref: &str,
+    scope: &Scope,
+) -> Result<String, anyhow::Error> {
+    let fragment_pos = interface_ref
+        .find('#')
+        .unwrap_or_else(|| interface_ref.len());
+    let fragment = &interface_ref[fragment_pos..];
+    let variety = if fragment == "#SameAsInterface" {
+        // Get the interface variant from the surrounding scope.
+        if let Some(variant) = scope.variant {
+            variant
+        } else {
+            return Err(format_err!(
+                "cannot use #SameAsInterface outside of a `components.interfaces` declaration"
+            ));
+        }
+    } else {
+        interface_ref[fragment_pos..].parse::<InterfaceVariant>()?
+    };
+    let target = format!(
+        "#/components/schemas/{}{}",
+        &interface_ref[..fragment_pos],
+        variety.to_schema_suffix_str()
+    );
+    Ok(target)
 }
 
 #[test]

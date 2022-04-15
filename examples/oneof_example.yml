@@ -1,0 +1,53 @@
+# How to use `oneOf` with interfaces to define discriminated type unions.
+
+openapi: "3.1.0"
+info:
+  title: Example OpenAPI definition
+paths: {}
+components:
+  interfaces:
+    # A "oneOf" interface can be used to generate a TypeScript type union or
+    # a Rust enumeration, including the "Post", etc., variants.
+    ShapeOptions:
+      description: "Options for a shape."
+      oneOf:
+        - $interface: "SquareShapeOptions#SameAsInterface"
+        - $interface: "RoundShapeOptions#SameAsInterface"
+      discriminator:
+        propertyName: type
+        mapping:
+          square: "SquareShapeOptions#SameAsInterface"
+          round: "RoundShapeOptions#SameAsInterface"
+
+    SquareShapeOptions:
+      members:
+        type:
+          required: true
+          initializable: true
+          schema:
+            type: string
+            example: square
+        height:
+          required: true
+          mutable: true
+          schema:
+            type: number
+        width:
+          required: true
+          mutable: true
+          schema:
+            type: number
+
+    RoundShapeOptions:
+      members:
+        type:
+          required: true
+          initializable: true
+          schema:
+            type: string
+            example: round
+        radius:
+          required: true
+          mutable: true
+          schema:
+            type: number
