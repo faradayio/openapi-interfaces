@@ -4,9 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.2.2-beta.2 - 2022-04-16
+
+### Added
+
+- **Experimental:** Add `title` and `description` to the `oneOf` schemas introduced for `MergePatch` types. The goal here is to make auto-generated documentation prettier.
+
 ## 0.2.2-beta.1 - 2022-04-15
 
-Added:
+### Added
 
 - **Experimental:** Add support for using `oneOf` in interfaces. See [`oneof_example.yml`](https://github.com/faradayio/openapi-interfaces/blob/main/examples/oneof_example.yml) and [`oneof_example_output.yml`](https://github.com/faradayio/openapi-interfaces/blob/main/examples/oneof_example_output.yml) for example input and output.
 
