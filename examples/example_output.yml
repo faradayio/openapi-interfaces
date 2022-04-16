@@ -41,7 +41,11 @@ components:
         comment:
           oneOf:
             - type: string
+              title: "Overwrite"
+              description: "Pass this value to overwrite the existing value."
             - type: "null"
+              title: "Clear"
+              description: "Pass `null` to clear this field's existing value."
         name:
           type: string
       additionalProperties: false

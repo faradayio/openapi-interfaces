@@ -118,6 +118,7 @@ components:
         name:
           mutable: true
           schema:
+            description: "The name of this widget."
             type: string
         vendor_id:
           required: true

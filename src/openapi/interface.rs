@@ -363,6 +363,7 @@ impl GenerateSchemaVariant for BasicInterface {
                     "A patch to `{}Put` in JSON Merge Patch format (RFC 7396).",
                     name
                 )),
+                title: None,
                 example: None,
                 unknown_fields: BTreeMap::default(),
             };
@@ -426,6 +427,7 @@ impl GenerateSchemaVariant for BasicInterface {
             items: None,
             nullable: None,
             description,
+            title: None,
             example,
             unknown_fields: BTreeMap::default(),
         };
@@ -442,7 +444,8 @@ fn generates_generic_merge_patch_types_when_necessary() {
             required: false,
             mutable: true,
             initializable: None,
-            schema: Schema::null(),
+            // Literally any schema would work here.
+            schema: Schema::new_schema_matching_only_null_for_merge_patch(),
         },
     );
     let iface = BasicInterface {
@@ -536,7 +539,7 @@ impl Member {
                     Some(schema)
                 } else {
                     // Optional fields become nullable.
-                    Some(schema.allowing_null())
+                    Some(schema.new_schema_matching_current_or_null_for_merge_patch())
                 }
             }
             InterfaceVariant::MergePatch => None,
@@ -578,6 +581,7 @@ impl GenerateSchemaVariant for OneOfInterface {
 
         Ok(Schema::Value(BasicSchema::OneOf(OneOf {
             schemas,
+            description: None,
             discriminator,
             unknown_fields: Default::default(),
         })))
