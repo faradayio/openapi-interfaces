@@ -581,7 +581,7 @@ impl GenerateSchemaVariant for OneOfInterface {
 
         Ok(Schema::Value(BasicSchema::OneOf(OneOf {
             schemas,
-            description: None,
+            description: self.description.clone(),
             discriminator,
             unknown_fields: Default::default(),
         })))
