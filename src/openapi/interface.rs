@@ -325,6 +325,12 @@ pub struct BasicInterface {
     #[serde(default)]
     description: Option<String>,
 
+    /// An optional human-readable title. Used in documentation
+    /// for cases where the resource name, which is generally used
+    /// by default, is not desired.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+
     /// Example data for this type.
     ///
     /// TODO: We'll need multiple versions for different variants, sadly.
@@ -410,6 +416,13 @@ impl GenerateSchemaVariant for BasicInterface {
             None
         };
 
+        // TODO: Only include the title on the base type for now.
+        let title = if variant == InterfaceVariant::Get {
+            self.title.clone()
+        } else {
+            None
+        };
+
         // TODO: Only include the example on the POST type now. We **will**
         // break this.
         let example = if variant == InterfaceVariant::Post {
@@ -427,7 +440,7 @@ impl GenerateSchemaVariant for BasicInterface {
             items: None,
             nullable: None,
             description,
-            title: None,
+            title,
             example,
             unknown_fields: BTreeMap::default(),
         };
@@ -453,6 +466,7 @@ fn generates_generic_merge_patch_types_when_necessary() {
         members,
         additional_members: None,
         description: None,
+        title: None,
         example: None,
     };
 
@@ -555,6 +569,12 @@ pub struct OneOfInterface {
     #[serde(default)]
     description: Option<String>,
 
+    /// An optional human-readable title. Used in documentation
+    /// for cases where the resource name, which is generally used
+    /// by default, is not desired.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+
     /// Allowable types that can be used for this interface.
     one_of: Vec<Schema>,
 
@@ -582,6 +602,7 @@ impl GenerateSchemaVariant for OneOfInterface {
         Ok(Schema::Value(BasicSchema::OneOf(OneOf {
             schemas,
             description: self.description.clone(),
+            title: self.title.clone(),
             discriminator,
             unknown_fields: Default::default(),
         })))

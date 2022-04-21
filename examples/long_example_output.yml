@@ -54,6 +54,7 @@ components:
         - error
     Widget:
       type: object
+      title: "Widgetter"
       required:
         - created_at
         - id
