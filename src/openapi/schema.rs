@@ -310,6 +310,7 @@ pub struct OneOf {
     pub title: Option<String>,
 
     /// How to differentiate between our child schemas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub discriminator: Option<Discriminator>,
 
     /// YAML fields we want to pass through blindly.
