@@ -1,6 +1,6 @@
 [package]
 name = "openapi-interfaces"
-version = "0.2.2-beta.2"
+version = "0.2.2-beta.3"
 authors = ["Eric Kidd <git@randomhacks.net>"]
 edition = "2018"
 
