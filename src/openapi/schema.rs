@@ -101,6 +101,7 @@ fn allowing_null_turns_refs_into_oneof() {
                 Schema::new_schema_matching_only_null_for_merge_patch()
             ],
             description: None,
+            title: None,
             discriminator: None,
             unknown_fields: Default::default(),
         }))
@@ -302,7 +303,14 @@ pub struct OneOf {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 
+    /// An optional human-readable title. Used in documentation
+    /// for cases where the resource name, which is generally used
+    /// by default, is not desired.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+
     /// How to differentiate between our child schemas.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub discriminator: Option<Discriminator>,
 
     /// YAML fields we want to pass through blindly.
@@ -323,6 +331,7 @@ impl OneOf {
         OneOf {
             schemas,
             description,
+            title: None,
             discriminator: None,
             unknown_fields: Default::default(),
         }
@@ -336,6 +345,7 @@ impl Transpile for OneOf {
         Ok(Self {
             schemas: self.schemas.transpile(scope)?,
             description: self.description.clone(),
+            title: self.title.clone(),
             discriminator: self.discriminator.clone(),
             unknown_fields: self.unknown_fields.clone(),
         })

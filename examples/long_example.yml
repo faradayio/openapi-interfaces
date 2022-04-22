@@ -100,6 +100,9 @@ components:
             $ref: "#/components/schemas/ResourceStatus"
     Widget:
       $includes: "Resource"
+      # On optional title field, used when the resource name doesn't match the 
+      # desired user-facing name in documentation.
+      title: "Widgetter"
       members:
         id:
           schema:
