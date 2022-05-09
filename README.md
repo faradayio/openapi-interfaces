@@ -71,7 +71,7 @@ components:
           mutable: false
           # But we do allow this to be set at creation time.
           # If omitted, `initializable` defaults to the value
-          # of `mutable.
+          # of the `mutable` option.
           initializable: true
           schema:
             type: string
