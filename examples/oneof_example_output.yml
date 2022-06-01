@@ -4,6 +4,7 @@ paths: {}
 components:
   schemas:
     ShapeOptions:
+      type: object
       description: "Options for a shape."
       oneOf:
         - $ref: "#/components/schemas/SquareShapeOptions"
@@ -15,6 +16,7 @@ components:
           round: "#/components/schemas/RoundShapeOptions"
 
     ShapeOptionsMergePatch:
+      type: object
       description: "Options for a shape."
       oneOf:
         - $ref: "#/components/schemas/SquareShapeOptionsMergePatch"
@@ -26,6 +28,7 @@ components:
           round: "#/components/schemas/RoundShapeOptionsMergePatch"
 
     ShapeOptionsPost:
+      type: object
       description: "Options for a shape."
       oneOf:
         - $ref: "#/components/schemas/SquareShapeOptionsPost"
@@ -37,6 +40,7 @@ components:
           round: "#/components/schemas/RoundShapeOptionsPost"
 
     ShapeOptionsPut:
+      type: object
       description: "Options for a shape."
       oneOf:
         - $ref: "#/components/schemas/SquareShapeOptionsPut"

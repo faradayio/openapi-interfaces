@@ -762,6 +762,7 @@ impl TranspileInterface for OneOfInterface {
             unknown_fields: Default::default(),
         };
         Ok(Schema::Value(BasicSchema::OneOf(OneOf {
+            r#type: Some(Type::Object),
             schemas,
             description: self.description.clone(),
             title: self.title.clone(),
