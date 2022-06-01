@@ -405,6 +405,13 @@ pub struct PrimitiveSchema {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
 
+    /// Constant data value which must always appear.
+    ///
+    /// The `r#` allows us to use the reserved word `const` as a regular
+    /// identifier.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub r#const: Option<Value>,
+
     /// Example data for this type.
     ///
     /// TODO: We'll need multiple versions for different variants, sadly.
@@ -438,6 +445,7 @@ impl PrimitiveSchema {
             nullable: None,
             description: Default::default(),
             title: Default::default(),
+            r#const: Default::default(),
             example: Default::default(),
             unknown_fields: Default::default(),
         }
@@ -491,6 +499,7 @@ impl Transpile for PrimitiveSchema {
             nullable: None,
             description: self.description.clone(),
             title: self.title.clone(),
+            r#const: self.r#const.clone(),
             example: self.example.clone(),
             unknown_fields: self.unknown_fields.clone(),
         })
