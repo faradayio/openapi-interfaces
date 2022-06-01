@@ -496,19 +496,18 @@ impl TranspileInterface for BasicInterface {
             None => AdditionalProperties::Bool(false),
         };
 
-        // TODO: Only include the description on the base type for now.
-        let description = if variant == InterfaceVariant::Get {
-            self.description.clone()
-        } else {
-            None
-        };
+        // Set an appropriate description for each generated type.
+        let description = self.description.as_ref().map(|desc| {
+            match variant {
+                InterfaceVariant::Get => desc.clone(),
+                InterfaceVariant::Post => format!("(Parameters used to POST a new value of the `{}` type.)\n\n{}", name, desc),
+                InterfaceVariant::Put => format!("(Parameters used to PUT a value of the `{}` type.)\n\n{}", name, desc),
+                InterfaceVariant::MergePatch => format!("(Parameters used to PATCH the `{}` type.)\n\n{}", name, desc),
+            }
+        });
 
-        // TODO: Only include the title on the base type for now.
-        let title = if variant == InterfaceVariant::Get {
-            self.title.clone()
-        } else {
-            None
-        };
+        // TODO: Always copy the title verbatim, though we may change this later.
+        let title = self.title.clone();
 
         // TODO: Only include the example on the POST type now. We **will**
         // break this.

@@ -38,6 +38,8 @@ components:
     Widget:
       # Include all fields from `Resource`.
       $includes: "Resource"
+      description: |
+        A displayable widget.
       members:
         # We can override properties from `Resource` using JSON
         # Merge Patch syntax.

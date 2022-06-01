@@ -19,6 +19,8 @@ components:
   schemas:
     Widget:
       type: object
+      description: |
+        A displayable widget.
       required:
         - id
         - name
@@ -37,6 +39,10 @@ components:
       additionalProperties: false
     WidgetMergePatch:
       type: object
+      description: |
+        (Parameters used to PATCH the `Widget` type.)
+
+        A displayable widget.
       properties:
         comment:
           oneOf:
@@ -51,6 +57,10 @@ components:
       additionalProperties: false
     WidgetPost:
       type: object
+      description: |
+        (Parameters used to POST a new value of the `Widget` type.)
+
+        A displayable widget.
       required:
         - name
         - readonly
@@ -63,6 +73,10 @@ components:
           type: string
       additionalProperties: false
     WidgetPut:
+      description: |
+        (Parameters used to PUT a value of the `Widget` type.)
+
+        A displayable widget.
       type: object
       required:
         - name

@@ -89,6 +89,7 @@ components:
       additionalProperties: false
     WidgetPost:
       type: object
+      title: "Widgetter"
       required:
         - metadata
         - sku
@@ -107,6 +108,7 @@ components:
       additionalProperties: false
     WidgetPut:
       type: object
+      title: "Widgetter"
       required:
         - metadata
       properties:
@@ -118,6 +120,7 @@ components:
       additionalProperties: false
     WidgetMergePatch:
       type: object
+      title: "Widgetter"
       properties:
         name:
           description: "The name of this widget."
