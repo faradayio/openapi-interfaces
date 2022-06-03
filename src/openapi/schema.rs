@@ -96,6 +96,7 @@ fn allowing_null_turns_refs_into_oneof() {
     assert_eq!(
         schema.new_schema_matching_current_or_null_for_merge_patch(),
         RefOr::Value(BasicSchema::OneOf(OneOf {
+            r#type: None,
             schemas: vec![
                 schema,
                 Schema::new_schema_matching_only_null_for_merge_patch()
@@ -295,6 +296,13 @@ impl Transpile for AllOf {
 /// A `oneOf` schema.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OneOf {
+    /// If `discriminator.is_some()`, then this should always be
+    /// `Some(Type::Object)`, because `oneOf` with a `discriminator` only works
+    /// for object types. OpenAPI 3.1 allows us to omit `type: object`, but
+    /// Readme.com requires it.
+    #[serde(rename = "type", default)]
+    pub r#type: Option<Type>,
+
     /// Our child schemas.
     #[serde(rename = "oneOf")]
     pub schemas: Vec<Schema>,
@@ -329,6 +337,7 @@ impl OneOf {
             Schema::new_schema_matching_only_null_for_merge_patch(),
         ];
         OneOf {
+            r#type: None,
             schemas,
             description,
             title: None,
@@ -343,6 +352,7 @@ impl Transpile for OneOf {
 
     fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
         Ok(Self {
+            r#type: self.r#type.clone(),
             schemas: self.schemas.transpile(scope)?,
             description: self.description.clone(),
             title: self.title.clone(),
@@ -405,6 +415,13 @@ pub struct PrimitiveSchema {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
 
+    /// Constant data value which must always appear.
+    ///
+    /// The `r#` allows us to use the reserved word `const` as a regular
+    /// identifier.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub r#const: Option<Value>,
+
     /// Example data for this type.
     ///
     /// TODO: We'll need multiple versions for different variants, sadly.
@@ -438,6 +455,7 @@ impl PrimitiveSchema {
             nullable: None,
             description: Default::default(),
             title: Default::default(),
+            r#const: Default::default(),
             example: Default::default(),
             unknown_fields: Default::default(),
         }
@@ -491,6 +509,7 @@ impl Transpile for PrimitiveSchema {
             nullable: None,
             description: self.description.clone(),
             title: self.title.clone(),
+            r#const: self.r#const.clone(),
             example: self.example.clone(),
             unknown_fields: self.unknown_fields.clone(),
         })

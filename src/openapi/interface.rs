@@ -19,7 +19,7 @@ use crate::openapi::{
 };
 
 use super::{
-    ref_or::transpile_interface_ref_to_ref,
+    ref_or::{split_interface_ref, InterfaceRef},
     schema::{Discriminator, Nullable, OneOf, Schema},
     Scope, Transpile,
 };
@@ -102,14 +102,12 @@ impl Interfaces {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-}
 
-impl Transpile for Interfaces {
-    type Output = BTreeMap<String, Schema>;
-
-    fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
-        // Use `TopologicalSort` to sort our interfaces so that included
-        // interfaces come before interfaces that include them.
+    /// Expand all any interfaces which use `$include` and return the expanded
+    /// interfaces.
+    fn expand_includes_interfaces(
+        &self,
+    ) -> Result<BTreeMap<&str, Box<dyn TranspileInterface>>> {
         let mut sort = TopologicalSort::<&str>::new();
         for (name, interface) in &self.0 {
             if let Interface::Includes(inclusion) = interface {
@@ -125,10 +123,8 @@ impl Transpile for Interfaces {
                 sort.insert(name.as_str());
             }
         }
-
-        // Expand `$includes` using JSON Merge Patch.
         let mut expanded: BTreeMap<&str, BasicInterface> = BTreeMap::new();
-        let mut to_generate: BTreeMap<&str, Box<dyn GenerateSchemaVariant>> =
+        let mut interfaces: BTreeMap<&str, Box<dyn TranspileInterface>> =
             BTreeMap::new();
         for name in sort {
             let interface = self
@@ -147,29 +143,54 @@ impl Transpile for Interfaces {
                     })?;
                     reparsed.emit = inclusion.emit; // This is never merged.
                     expanded.insert(name, reparsed.clone());
-                    to_generate.insert(name, Box::new(reparsed));
+                    interfaces.insert(name, Box::new(reparsed));
                 }
                 Interface::Basic(base) => {
                     expanded.insert(name, base.clone());
-                    to_generate.insert(name, Box::new(base.clone()));
+                    interfaces.insert(name, Box::new(base.clone()));
                 }
                 Interface::OneOf(one_of) => {
-                    to_generate.insert(name, Box::new(one_of.clone()));
+                    interfaces.insert(name, Box::new(one_of.clone()));
                 }
+            }
+        }
+        Ok(interfaces)
+    }
+}
+
+impl Transpile for Interfaces {
+    type Output = BTreeMap<String, Schema>;
+
+    fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
+        // Expand `$include` and get a map of interfaces we need to generate
+        // schemas for.
+        let interfaces = self.expand_includes_interfaces()?;
+
+        // Get the discriminators for any interfaces which have them.
+        let mut interface_discriminators = BTreeMap::default();
+        for (&name, interface) in &interfaces {
+            if let Some(discriminator) =
+                interface.discriminator_info()?
+            {
+                interface_discriminators.insert(name.to_owned(), discriminator);
             }
         }
 
         // Generate schemas for all variants of all interfaces unless indicated
         // otherwise.
         let mut schemas = BTreeMap::new();
-        for (name, interface) in to_generate {
+        for (name, interface) in interfaces {
             if !interface.should_emit() {
                 continue;
             }
             for variant in INTERFACE_VARIANTS.iter().cloned() {
                 let schema_name = interface.schema_variant_name(name, variant);
-                let schema =
-                    interface.generate_schema_variant(scope, name, variant)?;
+                let schema = interface.generate_schema_variant(
+                    scope,
+                    &interface_discriminators,
+                    name,
+                    variant,
+                )?;
 
                 if schema.matches_only_empty_object() {
                     warn!(
@@ -197,6 +218,7 @@ impl Transpile for Interfaces {
 /// in way that's less "validation-like" and more "type-like".
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum Interface {
     /// An interface that `$includes` another interface. We can't parse this
     /// until the inclusion has been computed.
@@ -241,11 +263,29 @@ impl<'de> Deserialize<'de> for Interface {
     }
 }
 
+/// Information about a
+struct DiscriminatorInfo {
+    /// The member name which stores the discriminator.
+    member_name: String,
+    /// The discriminator value which identifies this specific type.
+    value: String,
+}
+
 /// Methods used to compile interfaces into multiple schemas.
-trait GenerateSchemaVariant {
+trait TranspileInterface {
     /// Should be emit this schema in our output file?
     fn should_emit(&self) -> bool {
         true
+    }
+
+    /// The discriminatorMemberName field, if it exists for this interface, plus
+    /// the discriminator value associated with this interface. May return an
+    /// error if `discriminatorMemberName` exists but points at an invalid
+    /// field.
+    fn discriminator_info(
+        &self,
+    ) -> Result<Option<DiscriminatorInfo>> {
+        Ok(None)
     }
 
     /// What name should we use for the specified variant of this schema?
@@ -257,6 +297,7 @@ trait GenerateSchemaVariant {
     fn generate_schema_variant(
         &self,
         scope: &Scope,
+        interface_discriminators: &BTreeMap<String, DiscriminatorInfo>,
         name: &str,
         variant: InterfaceVariant,
     ) -> Result<Schema>;
@@ -321,6 +362,11 @@ pub struct BasicInterface {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     additional_members: Option<Member>,
 
+    /// Which member of this interface, if any, will be used as a discriminator
+    /// when we combine it into a one-of interface?
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    discriminator_member_name: Option<String>,
+
     /// A description of this type.
     #[serde(default)]
     description: Option<String>,
@@ -338,15 +384,54 @@ pub struct BasicInterface {
     example: Option<Value>,
 }
 
-impl GenerateSchemaVariant for BasicInterface {
+impl TranspileInterface for BasicInterface {
     fn should_emit(&self) -> bool {
         self.emit
+    }
+
+    fn discriminator_info(
+        &self,
+    ) -> Result<Option<DiscriminatorInfo>> {
+        if let Some(discr) = &self.discriminator_member_name {
+            if let Some(member) = self.members.get(discr) {
+                if !member.required || !member.is_initializable() || member.mutable {
+                    return Err(format_err!(
+                        "discriminator member {:?} must be `initializable: true`, `required: true`, `mutable: false`",
+                        discr
+                    ));
+                }
+                if let RefOr::Value(BasicSchema::Primitive(schema)) = &member.schema {
+                    if let Some(value) = &schema.r#const {
+                        if let Some(value) = value.as_str() {
+                            Ok(Some(DiscriminatorInfo {
+                                member_name: discr.to_owned(),
+                                value: value.to_owned(),
+                            }))
+                        } else {
+                            Err(format_err!("discriminator member {:?} must have a `schema.const` containing a string, not {}", discr, value))
+                        }
+                    } else {
+                        Err(format_err!("discriminator member {:?} must have a `schema.const` value", discr))
+                    }
+                } else {
+                    Err(format_err!("discriminator member {:?} must have a simple schema with `type`", discr))
+                }
+            } else {
+                Err(format_err!(
+                    "discriminatorMemberName {:?} not present in `members:`",
+                    discr
+                ))
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     /// Generate a specific schema variant from this interface.
     fn generate_schema_variant(
         &self,
         scope: &Scope,
+        _interface_discriminators: &BTreeMap<String, DiscriminatorInfo>,
         name: &str,
         variant: InterfaceVariant,
     ) -> Result<Schema> {
@@ -370,6 +455,7 @@ impl GenerateSchemaVariant for BasicInterface {
                     name
                 )),
                 title: None,
+                r#const: None,
                 example: None,
                 unknown_fields: BTreeMap::default(),
             };
@@ -380,9 +466,10 @@ impl GenerateSchemaVariant for BasicInterface {
         let mut required = vec![];
         let mut properties = BTreeMap::new();
         for (name, member) in &self.members {
-            if let Some(schema) = member.schema_for(scope, variant)? {
+            let is_discriminator = Some(name) == self.discriminator_member_name.as_ref();
+            if let Some(schema) = member.schema_for(scope, variant, is_discriminator)? {
                 properties.insert(name.to_owned(), schema);
-                if member.is_required_for(variant) {
+                if member.is_required_for(variant, is_discriminator) {
                     required.push(name.to_owned());
                 }
             }
@@ -397,7 +484,7 @@ impl GenerateSchemaVariant for BasicInterface {
                 ));
             }
             Some(additional_members) => {
-                if let Some(schema) = additional_members.schema_for(scope, variant)? {
+                if let Some(schema) = additional_members.schema_for(scope, variant, false)? {
                     AdditionalProperties::Schema(schema)
                 } else {
                     AdditionalProperties::Bool(false)
@@ -409,19 +496,18 @@ impl GenerateSchemaVariant for BasicInterface {
             None => AdditionalProperties::Bool(false),
         };
 
-        // TODO: Only include the description on the base type for now.
-        let description = if variant == InterfaceVariant::Get {
-            self.description.clone()
-        } else {
-            None
-        };
+        // Set an appropriate description for each generated type.
+        let description = self.description.as_ref().map(|desc| {
+            match variant {
+                InterfaceVariant::Get => desc.clone(),
+                InterfaceVariant::Post => format!("(Parameters used to POST a new value of the `{}` type.)\n\n{}", name, desc),
+                InterfaceVariant::Put => format!("(Parameters used to PUT a value of the `{}` type.)\n\n{}", name, desc),
+                InterfaceVariant::MergePatch => format!("(Parameters used to PATCH the `{}` type.)\n\n{}", name, desc),
+            }
+        });
 
-        // TODO: Only include the title on the base type for now.
-        let title = if variant == InterfaceVariant::Get {
-            self.title.clone()
-        } else {
-            None
-        };
+        // TODO: Always copy the title verbatim, though we may change this later.
+        let title = self.title.clone();
 
         // TODO: Only include the example on the POST type now. We **will**
         // break this.
@@ -441,6 +527,7 @@ impl GenerateSchemaVariant for BasicInterface {
             nullable: None,
             description,
             title,
+            r#const: None,
             example,
             unknown_fields: BTreeMap::default(),
         };
@@ -465,6 +552,7 @@ fn generates_generic_merge_patch_types_when_necessary() {
         emit: true,
         members,
         additional_members: None,
+        discriminator_member_name: None,
         description: None,
         title: None,
         example: None,
@@ -475,7 +563,12 @@ fn generates_generic_merge_patch_types_when_necessary() {
         ..Scope::default()
     };
     let generated = iface
-        .generate_schema_variant(&scope, "Example", InterfaceVariant::MergePatch)
+        .generate_schema_variant(
+            &scope,
+            &BTreeMap::default(),
+            "Example",
+            InterfaceVariant::MergePatch,
+        )
         .unwrap();
 
     let expected_yaml = r#"
@@ -515,11 +608,12 @@ impl Member {
     }
 
     /// Should this member be marked as `required` in this variant?
-    fn is_required_for(&self, variant: InterfaceVariant) -> bool {
+    fn is_required_for(&self, variant: InterfaceVariant, is_discriminator: bool) -> bool {
         match variant {
             InterfaceVariant::Get => self.required,
             InterfaceVariant::Post => self.required && self.is_initializable(),
             InterfaceVariant::Put => self.required && self.mutable,
+            InterfaceVariant::MergePatch if is_discriminator => true,
             InterfaceVariant::MergePatch => false,
         }
     }
@@ -531,6 +625,7 @@ impl Member {
         &self,
         scope: &Scope,
         variant: InterfaceVariant,
+        is_discriminator: bool,
     ) -> Result<Option<Schema>> {
         let scope = scope.with_variant(variant);
         Ok(match variant {
@@ -543,6 +638,9 @@ impl Member {
                 Some(self.schema.transpile(&scope)?)
             }
             InterfaceVariant::Put => None,
+            InterfaceVariant::MergePatch if is_discriminator => {
+                Some(self.schema.transpile(&scope)?)
+            }
             InterfaceVariant::MergePatch if self.mutable => {
                 let schema = self.schema.transpile(&scope)?;
                 if self.required {
@@ -576,76 +674,101 @@ pub struct OneOfInterface {
     title: Option<String>,
 
     /// Allowable types that can be used for this interface.
-    one_of: Vec<Schema>,
-
-    /// How to tell the allowable types apart.
-    discriminator: InterfaceDiscriminator,
+    one_of: Vec<InterfaceRef>,
 }
 
-impl GenerateSchemaVariant for OneOfInterface {
+impl TranspileInterface for OneOfInterface {
     fn generate_schema_variant(
         &self,
         scope: &Scope,
-        _name: &str,
+        interface_discriminators: &BTreeMap<String, DiscriminatorInfo>,
+        name: &str,
         variant: InterfaceVariant,
     ) -> Result<Schema> {
         let scope = scope.with_variant(variant);
 
+        // Convert our `oneOf.$interface` values to `$ref` values.
         let schemas = self
             .one_of
             .iter()
-            .map(|schema| schema.transpile(&scope))
+            .map(|interface_ref| Ok(RefOr::Ref(interface_ref.transpile(&scope)?)))
             .collect::<Result<Vec<_>>>()?;
 
-        let discriminator = Some(self.discriminator.transpile(&scope)?);
+        // Look up all our the interfaces mentioned in our interface refs.
+        let mut discriminator_member_names = BTreeSet::default();
+        let mut discriminator_values = BTreeSet::default();
+        let mut discriminator_value_to_interface_map = BTreeMap::default();
+        for interface_ref in &self.one_of {
+            let (base, _fragment) = split_interface_ref(&interface_ref.target);
+            let discr_info = interface_discriminators.get(base).ok_or_else(|| {
+                format_err!(
+                    "interface {:?} referred to by {:?} does not exist, or does not have a discriminatorMember",
+                    base,
+                    name
+                )
+            })?;
 
+            // Keep track of disriminator member names. We want have exactly one.
+            discriminator_member_names.insert(discr_info.member_name.clone());
+
+            // Keep track of discriminator values. We want them to be unique.
+            if !discriminator_values.insert(discr_info.value.clone()) {
+                return Err(format_err!(
+                    "discriminator value {}.{} = {:?} is already used by another type in {}",
+                    base, discr_info.member_name, discr_info.value, name
+                ));
+            }
+
+            // Keep track of which discriminator values map to which types. We
+            // expect this mapping to be unique.
+            if let Some(existing_type) = discriminator_value_to_interface_map
+                .insert(discr_info.value.clone(), base.to_owned())
+            {
+                return Err(format_err!(
+                    "interface {iface} includes conflicting discriminator values {current}.{member} = {value:?} and {existing}.{member} = {value:?}",
+                    iface = name, 
+                    existing = existing_type, 
+                    current = base,
+                    member = discr_info.member_name,
+                    value = discr_info.value
+                ));
+            }
+        }
+
+        // Make sure that we have exactly one discriminator name.
+        if discriminator_member_names.is_empty() {
+            return Err(format_err!("interface {} includes no types", name));
+        } else if discriminator_member_names.len() > 1 {
+            return Err(format_err!(
+                "interface {} includes interfaces with multiple, conflicting discriminator names: {:?}",
+                name, discriminator_member_names,
+            ));
+        }
+        let property_name = discriminator_member_names
+            .into_iter()
+            .next()
+            .expect("should always have a value");
+
+        // Generate `mapping`.
+        let mut mapping = BTreeMap::default();
+        for (value, iface) in discriminator_value_to_interface_map {
+            mapping.insert(value.to_owned(), format!("#/components/schemas/{}", self.schema_variant_name(&iface, variant)));
+        }
+
+        // Build our return value.
+        let discriminator = Discriminator {
+            property_name,
+            mapping,
+            unknown_fields: Default::default(),
+        };
         Ok(Schema::Value(BasicSchema::OneOf(OneOf {
+            r#type: Some(Type::Object),
             schemas,
             description: self.description.clone(),
             title: self.title.clone(),
-            discriminator,
+            discriminator: Some(discriminator),
             unknown_fields: Default::default(),
         })))
-    }
-}
-
-/// Information about the discriminator for a `OneOfInterface`.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct InterfaceDiscriminator {
-    /// The property name that distinguishes the types.
-    property_name: String,
-
-    /// If the values in the field specified by `property_name` do not match the
-    /// names of the schemas, you can override them using `mapping`.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    mapping: BTreeMap<String, String>,
-}
-
-impl Transpile for InterfaceDiscriminator {
-    type Output = Discriminator;
-
-    fn transpile(&self, scope: &Scope) -> Result<Self::Output> {
-        // Convert a map like:
-        //
-        //     "square": "SquareShapeOptions#SameAsInterface"
-        //
-        // To a map like:
-        //
-        //     "square": "#/components/schemas/SquareShapeOptions"
-        let mut mapping = BTreeMap::new();
-        for (property_value, interface_ref) in self.mapping.iter() {
-            mapping.insert(
-                property_value.clone(),
-                transpile_interface_ref_to_ref(interface_ref, scope)?,
-            );
-        }
-
-        Ok(Discriminator {
-            property_name: self.property_name.clone(),
-            mapping,
-            unknown_fields: Default::default(),
-        })
     }
 }
 

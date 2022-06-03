@@ -146,7 +146,7 @@ impl Transpile for Ref {
 pub struct InterfaceRef {
     /// Path to reference.
     #[serde(rename = "$interface")]
-    target: String,
+    pub target: String,
 
     /// An optional human-readable description which overrides whatever is in
     /// the referenced schema.
@@ -181,15 +181,27 @@ impl Transpile for InterfaceRef {
     }
 }
 
+/// Split the value of an `$interface` reference into a base name and a
+/// fragment.
+pub fn split_interface_ref(interface_ref: &str) -> (&str, Option<&str>) {
+    let fragment_pos = interface_ref.find('#');
+    if let Some(fragment_pos) = fragment_pos {
+        (
+            &interface_ref[..fragment_pos],
+            Some(&interface_ref[fragment_pos..]),
+        )
+    } else {
+        (interface_ref, None)
+    }
+}
+
 /// Convert the value of an `$interface` to the body of a `$ref`.
 pub fn transpile_interface_ref_to_ref(
     interface_ref: &str,
     scope: &Scope,
 ) -> Result<String, anyhow::Error> {
-    let fragment_pos = interface_ref
-        .find('#')
-        .unwrap_or_else(|| interface_ref.len());
-    let fragment = &interface_ref[fragment_pos..];
+    let (base, fragment) = split_interface_ref(interface_ref);
+    let fragment = fragment.unwrap_or("");
     let variety = if fragment == "#SameAsInterface" {
         // Get the interface variant from the surrounding scope.
         if let Some(variant) = scope.variant {
@@ -200,11 +212,11 @@ pub fn transpile_interface_ref_to_ref(
             ));
         }
     } else {
-        interface_ref[fragment_pos..].parse::<InterfaceVariant>()?
+        fragment.parse::<InterfaceVariant>()?
     };
     let target = format!(
         "#/components/schemas/{}{}",
-        &interface_ref[..fragment_pos],
+        base,
         variety.to_schema_suffix_str()
     );
     Ok(target)
