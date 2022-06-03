@@ -169,9 +169,7 @@ impl Transpile for Interfaces {
         // Get the discriminators for any interfaces which have them.
         let mut interface_discriminators = BTreeMap::default();
         for (&name, interface) in &interfaces {
-            if let Some(discriminator) =
-                interface.discriminator_info()?
-            {
+            if let Some(discriminator) = interface.discriminator_info()? {
                 interface_discriminators.insert(name.to_owned(), discriminator);
             }
         }
@@ -282,9 +280,7 @@ trait TranspileInterface {
     /// the discriminator value associated with this interface. May return an
     /// error if `discriminatorMemberName` exists but points at an invalid
     /// field.
-    fn discriminator_info(
-        &self,
-    ) -> Result<Option<DiscriminatorInfo>> {
+    fn discriminator_info(&self) -> Result<Option<DiscriminatorInfo>> {
         Ok(None)
     }
 
@@ -389,9 +385,7 @@ impl TranspileInterface for BasicInterface {
         self.emit
     }
 
-    fn discriminator_info(
-        &self,
-    ) -> Result<Option<DiscriminatorInfo>> {
+    fn discriminator_info(&self) -> Result<Option<DiscriminatorInfo>> {
         if let Some(discr) = &self.discriminator_member_name {
             if let Some(member) = self.members.get(discr) {
                 if !member.required || !member.is_initializable() || member.mutable {
@@ -466,8 +460,11 @@ impl TranspileInterface for BasicInterface {
         let mut required = vec![];
         let mut properties = BTreeMap::new();
         for (name, member) in &self.members {
-            let is_discriminator = Some(name) == self.discriminator_member_name.as_ref();
-            if let Some(schema) = member.schema_for(scope, variant, is_discriminator)? {
+            let is_discriminator =
+                Some(name) == self.discriminator_member_name.as_ref();
+            if let Some(schema) =
+                member.schema_for(scope, variant, is_discriminator)?
+            {
                 properties.insert(name.to_owned(), schema);
                 if member.is_required_for(variant, is_discriminator) {
                     required.push(name.to_owned());
@@ -484,7 +481,9 @@ impl TranspileInterface for BasicInterface {
                 ));
             }
             Some(additional_members) => {
-                if let Some(schema) = additional_members.schema_for(scope, variant, false)? {
+                if let Some(schema) =
+                    additional_members.schema_for(scope, variant, false)?
+                {
                     AdditionalProperties::Schema(schema)
                 } else {
                     AdditionalProperties::Bool(false)
@@ -497,13 +496,20 @@ impl TranspileInterface for BasicInterface {
         };
 
         // Set an appropriate description for each generated type.
-        let description = self.description.as_ref().map(|desc| {
-            match variant {
-                InterfaceVariant::Get => desc.clone(),
-                InterfaceVariant::Post => format!("(Parameters used to POST a new value of the `{}` type.)\n\n{}", name, desc),
-                InterfaceVariant::Put => format!("(Parameters used to PUT a value of the `{}` type.)\n\n{}", name, desc),
-                InterfaceVariant::MergePatch => format!("(Parameters used to PATCH the `{}` type.)\n\n{}", name, desc),
-            }
+        let description = self.description.as_ref().map(|desc| match variant {
+            InterfaceVariant::Get => desc.clone(),
+            InterfaceVariant::Post => format!(
+                "(Parameters used to POST a new value of the `{}` type.)\n\n{}",
+                name, desc
+            ),
+            InterfaceVariant::Put => format!(
+                "(Parameters used to PUT a value of the `{}` type.)\n\n{}",
+                name, desc
+            ),
+            InterfaceVariant::MergePatch => format!(
+                "(Parameters used to PATCH the `{}` type.)\n\n{}",
+                name, desc
+            ),
         });
 
         // TODO: Always copy the title verbatim, though we may change this later.
@@ -608,7 +614,11 @@ impl Member {
     }
 
     /// Should this member be marked as `required` in this variant?
-    fn is_required_for(&self, variant: InterfaceVariant, is_discriminator: bool) -> bool {
+    fn is_required_for(
+        &self,
+        variant: InterfaceVariant,
+        is_discriminator: bool,
+    ) -> bool {
         match variant {
             InterfaceVariant::Get => self.required,
             InterfaceVariant::Post => self.required && self.is_initializable(),
@@ -726,8 +736,8 @@ impl TranspileInterface for OneOfInterface {
             {
                 return Err(format_err!(
                     "interface {iface} includes conflicting discriminator values {current}.{member} = {value:?} and {existing}.{member} = {value:?}",
-                    iface = name, 
-                    existing = existing_type, 
+                    iface = name,
+                    existing = existing_type,
                     current = base,
                     member = discr_info.member_name,
                     value = discr_info.value
@@ -752,7 +762,13 @@ impl TranspileInterface for OneOfInterface {
         // Generate `mapping`.
         let mut mapping = BTreeMap::default();
         for (value, iface) in discriminator_value_to_interface_map {
-            mapping.insert(value.to_owned(), format!("#/components/schemas/{}", self.schema_variant_name(&iface, variant)));
+            mapping.insert(
+                value.to_owned(),
+                format!(
+                    "#/components/schemas/{}",
+                    self.schema_variant_name(&iface, variant)
+                ),
+            );
         }
 
         // Build our return value.
