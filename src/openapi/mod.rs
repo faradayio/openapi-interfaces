@@ -17,9 +17,9 @@ use std::{collections::BTreeMap, fs, path::Path, sync::Arc};
 
 mod interface;
 mod ref_or;
-mod scalar_or_vec;
 mod schema;
 mod serde_helpers;
+mod set_or_scalar;
 mod transpile;
 
 use crate::parse_error::{Annotation, FileInfo, ParseError};

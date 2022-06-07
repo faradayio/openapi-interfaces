@@ -11,7 +11,7 @@ use crate::openapi::serde_helpers::deserialize_enum_helper;
 
 use super::{
     ref_or::{ExpectedWhenParsing, RefOr},
-    scalar_or_vec, Scope, Transpile,
+    set_or_scalar, Scope, Transpile,
 };
 
 /// Interface for schema types that might be able to match against `null`.
@@ -147,7 +147,9 @@ impl BasicSchema {
 }
 
 impl<'de> Deserialize<'de> for BasicSchema {
-    // Manually deserialize for slightly better error messages.
+    // Manually deserialize for slightly better error messages. See
+    // https://github.com/faradayio/openapi-interfaces/issues/28 for the whole
+    // horrifying story.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -165,16 +167,17 @@ impl<'de> Deserialize<'de> for BasicSchema {
         if yaml.contains_key(&yaml_str("allOf")) {
             Ok(BasicSchema::AllOf(deserialize_enum_helper::<D, _>(
                 "allOf schema",
-                yaml,
+                Value::Mapping(yaml),
             )?))
         } else if yaml.contains_key(&yaml_str("oneOf")) {
             Ok(BasicSchema::OneOf(deserialize_enum_helper::<D, _>(
                 "oneOf schema",
-                yaml,
+                Value::Mapping(yaml),
             )?))
         } else if yaml.contains_key(&yaml_str("type")) {
             Ok(BasicSchema::Primitive(deserialize_enum_helper::<D, _>(
-                "schema", yaml,
+                "schema",
+                Value::Mapping(yaml),
             )?))
         } else {
             Err(D::Error::custom(format!(
@@ -384,7 +387,7 @@ pub struct Discriminator {
 #[serde(rename_all = "camelCase")]
 pub struct PrimitiveSchema {
     /// A set of value types which this schema will match.
-    #[serde(rename = "type", with = "scalar_or_vec")]
+    #[serde(rename = "type", with = "set_or_scalar")]
     pub types: BTreeSet<Type>,
 
     /// For `Type::Object`, a list of properties which must always be present.
@@ -531,8 +534,14 @@ pub enum Type {
     Null,
 }
 
+impl ExpectedWhenParsing for Type {
+    fn expected_when_parsing() -> &'static str {
+        "one of `string`, `number`, `integer`, `object`, `array`, `boolean` or `\"null\"`"
+    }
+}
+
 /// An `additionalProperties` value.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum AdditionalProperties {
     /// `true` (allowing any property) or `false` (allowing none).
@@ -551,6 +560,30 @@ impl AdditionalProperties {
 impl Default for AdditionalProperties {
     fn default() -> Self {
         AdditionalProperties::Bool(true)
+    }
+}
+
+impl<'de> Deserialize<'de> for AdditionalProperties {
+    // Manually deserialize for slightly better error messages. See
+    // https://github.com/faradayio/openapi-interfaces/issues/28 for the whole
+    // horrifying story.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde_yaml::Value;
+
+        // Parse it as raw YAML.
+        let yaml = Value::deserialize(deserializer)?;
+
+        // If this is a vec, handle it as such.
+        if let Value::Bool(b) = &yaml {
+            Ok(AdditionalProperties::Bool(*b))
+        } else {
+            Ok(AdditionalProperties::Schema(
+                deserialize_enum_helper::<D, _>("additionalProperties", yaml)?,
+            ))
+        }
     }
 }
 

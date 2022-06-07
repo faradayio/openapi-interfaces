@@ -46,7 +46,9 @@ where
         + PartialEq
         + Serialize,
 {
-    // Manually deserialize for slightly better error messages.
+    // Manually deserialize for slightly better error messages. See
+    // https://github.com/faradayio/openapi-interfaces/issues/28 for the whole
+    // horrifying story.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -63,12 +65,12 @@ where
         if yaml.contains_key(&yaml_str("$ref")) {
             Ok(RefOr::Ref(deserialize_enum_helper::<D, _>(
                 "$ref schema",
-                yaml,
+                Value::Mapping(yaml),
             )?))
         } else if yaml.contains_key(&yaml_str("$interface")) {
             Ok(RefOr::InterfaceRef(deserialize_enum_helper::<D, _>(
                 "$interface schema",
-                yaml,
+                Value::Mapping(yaml),
             )?))
         } else {
             Ok(RefOr::Value(deserialize_enum_helper::<D, _>(
@@ -76,7 +78,7 @@ where
                     "$ref, $interface or {}",
                     <T as ExpectedWhenParsing>::expected_when_parsing(),
                 ),
-                yaml,
+                Value::Mapping(yaml),
             )?))
         }
     }

@@ -229,7 +229,9 @@ pub enum Interface {
 }
 
 impl<'de> Deserialize<'de> for Interface {
-    // Manually deserialize for slightly better error messages.
+    // Manually deserialize for slightly better error messages. See
+    // https://github.com/faradayio/openapi-interfaces/issues/28 for the whole
+    // horrifying story.
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -245,17 +247,17 @@ impl<'de> Deserialize<'de> for Interface {
         if yaml.contains_key(&includes_key) {
             Ok(Interface::Includes(deserialize_enum_helper::<D, _>(
                 "`$includes` interface",
-                yaml,
+                Value::Mapping(yaml),
             )?))
         } else if yaml.contains_key(&oneof_key) {
             Ok(Interface::OneOf(deserialize_enum_helper::<D, _>(
                 "oneOf interface",
-                yaml,
+                Value::Mapping(yaml),
             )?))
         } else {
             Ok(Interface::Basic(deserialize_enum_helper::<D, _>(
                 "interface",
-                yaml,
+                Value::Mapping(yaml),
             )?))
         }
     }
