@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.0-rc.1 - 2022-06-03
+
+### Added
+
+- Binaries for Linux and Mac systems ([#27](https://github.com/faradayio/openapi-interfaces/issues/27)).
+- Allow including definitions from external files using `$includeFiles` ([#24](https://github.com/faradayio/openapi-interfaces/issues/24)). See [`examples/include_files/`](https://github.com/faradayio/openapi-interfaces/tree/main/examples/include_files) for an example of how this works. Start from `base.yml`.
+
+### Changed
+
+- See the "Changed" section in v0.2.2-beta.4. This should only affect people using `discriminator` and `oneOf` interfaces.
+
+### Fixed
+
+- Improved error messages in many cases ([#28](https://github.com/faradayio/openapi-interfaces/issues/28)).
+
 ## 0.2.2-beta.5 - 2022-06-03
 
 ### Fixed
@@ -19,7 +34,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## Changed
 
-- BREAKING: Completely overhaul how we handle `oneOf` interfaces and discriminators ([#18](https://github.com/faradayio/openapi-interfaces/issues/18)). This work is ongoing and not yet fully documented, but you can find a working example in [`examples/oneof_example.yml`](https://github.com/faradayio/openapi-interfaces/blob/main/examples/oneof_example.yml). This will require changing existing YAML files to use the new, TypeScript-like style. However, this feature is still **incomplete**. For ongoing discussion, see ([#18](https://github.com/faradayio/openapi-interfaces/issues/18))
+- BREAKING: Completely overhaul how we handle `oneOf` interfaces and discriminators ([#18](https://github.com/faradayio/openapi-interfaces/issues/18)). This work is ongoing and not yet fully documented, but you can find a working example in [`examples/oneof_example.yml`](https://github.com/faradayio/openapi-interfaces/blob/main/examples/oneof_example.yml). This will require changing existing YAML files to use the new, TypeScript-like style. However, this feature is still **incomplete**. For ongoing discussion, see ([#26](https://github.com/faradayio/openapi-interfaces/issues/26)).
 
 ## 0.2.2-beta.3 - 2022-04-22
 
