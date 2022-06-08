@@ -2,6 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    ops::{Deref, DerefMut},
     str::FromStr,
 };
 
@@ -155,6 +156,24 @@ impl Interfaces {
             }
         }
         Ok(interfaces)
+    }
+}
+
+// Pretend that we're a basically a smart pointer to the underlying `BTreeMap`,
+// so that we can be treated as such.
+impl Deref for Interfaces {
+    type Target = BTreeMap<String, Interface>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+// Pretend that we're a basically a mutable smart pointer to the underlying
+// `BTreeMap`, so that we can be treated as such.
+impl DerefMut for Interfaces {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
@@ -796,8 +815,8 @@ fn parses_one_of_example() {
     use pretty_assertions::assert_eq;
     use std::path::Path;
 
-    let parsed =
-        OpenApi::from_path(Path::new("./examples/oneof_example.yml")).unwrap();
+    let path = Path::new("./examples/oneof_example.yml").to_owned();
+    let parsed = OpenApi::from_path(&path).unwrap();
     //println!("{:#?}", parsed);
     let transpiled = parsed.transpile(&Scope::default()).unwrap();
     println!("{}", serde_yaml::to_string(&transpiled).unwrap());

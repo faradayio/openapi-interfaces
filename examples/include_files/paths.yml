@@ -1,0 +1,19 @@
+# External path definitions.
+
+openapi: "3.1.0"
+
+paths:
+  /widgets:
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $interface: "Widget#Post"
+      responses:
+        201:
+          content:
+            application/json:
+              schema:
+                $interface: "Widget"

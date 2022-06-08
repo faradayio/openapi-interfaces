@@ -1,0 +1,18 @@
+# External definitions of some components.
+
+openapi: "3.1.0"
+
+components:
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+
+  interfaces:
+    Resource:
+      emit: false
+      members:
+        id:
+          required: true
+          schema:
+            $ref: "#/components/schemas/Uuid"
