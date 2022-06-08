@@ -6,7 +6,7 @@
 #![warn(missing_docs, clippy::missing_docs_in_private_items)]
 
 use anyhow::{Context, Result};
-use log::debug;
+use log::{debug, trace};
 use std::{fs::File, io, path::PathBuf, process};
 use structopt::StructOpt;
 
@@ -14,6 +14,8 @@ mod openapi;
 mod parse_error;
 
 use openapi::{OpenApi, Scope, Transpile};
+
+use crate::openapi::included_files::resolve_included_files;
 
 /// Command-line options.
 #[derive(Debug, StructOpt)]
@@ -55,12 +57,15 @@ fn main() {
 
 /// Our real entry point.
 fn run(opt: &Opt) -> Result<()> {
-    let openapi = OpenApi::from_path(&opt.input)?;
+    let mut openapi = OpenApi::from_path(&opt.input)?;
     let mut scope = Scope::default();
     if !openapi.supports_type_null() || opt.avoid_type_null {
         // We don't support `type: "null"`, so don't introduce it.
         scope.use_generic_merge_patch_types = true;
     }
+    trace!("Parsed: {:#?}", openapi);
+    resolve_included_files(&mut openapi, &opt.input)?;
+    trace!("With includes: {:#?}", openapi);
     let transpiled = openapi.transpile(&scope)?;
     if let Some(output_path) = &opt.output {
         let mut out = File::create(output_path)

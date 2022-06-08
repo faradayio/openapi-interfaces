@@ -13,8 +13,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_with::{serde_as, DisplayFromStr};
 use std::io;
+use std::path::PathBuf;
 use std::{collections::BTreeMap, fs, path::Path, sync::Arc};
 
+pub mod included_files;
 mod interface;
 mod ref_or;
 mod schema;
@@ -38,10 +40,20 @@ pub struct OpenApi {
     #[serde_as(as = "DisplayFromStr")]
     openapi: Version,
 
+    /// A list of other files we should include.
+    #[serde(
+        rename = "$includeFiles",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    include_files: Vec<PathBuf>,
+
     /// REST path declarations.
+    #[serde(default)]
     paths: BTreeMap<String, BTreeMap<Method, Operation>>,
 
     /// Re-usable OpenAPI components.
+    #[serde(default)]
     components: Components,
 
     /// YAML fields we want to pass through blindly.
@@ -102,6 +114,7 @@ impl Transpile for OpenApi {
     fn transpile(&self, scope: &Scope) -> Result<Self> {
         Ok(Self {
             openapi: self.openapi.clone(),
+            include_files: Default::default(),
             paths: self.paths.transpile(scope)?,
             components: self.components.transpile(scope)?,
             unknown_fields: self.unknown_fields.clone(),
@@ -110,7 +123,7 @@ impl Transpile for OpenApi {
 }
 
 /// Reusable OpenAPI components.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Components {
     /// Reuable response bodies.
@@ -310,7 +323,8 @@ impl Transpile for MediaType {
 fn parses_example() {
     use pretty_assertions::assert_eq;
 
-    let parsed = OpenApi::from_path(Path::new("./examples/example.yml")).unwrap();
+    let path = Path::new("./examples/example.yml").to_owned();
+    let parsed = OpenApi::from_path(&path).unwrap();
     //println!("{:#?}", parsed);
     let transpiled = parsed.transpile(&Scope::default()).unwrap();
     let expected =
@@ -322,10 +336,26 @@ fn parses_example() {
 fn parses_long_example() {
     use pretty_assertions::assert_eq;
 
-    let parsed = OpenApi::from_path(Path::new("./examples/long_example.yml")).unwrap();
+    let path = Path::new("./examples/long_example.yml").to_owned();
+    let parsed = OpenApi::from_path(&path).unwrap();
     //println!("{:#?}", parsed);
     let transpiled = parsed.transpile(&Scope::default()).unwrap();
     let expected =
         OpenApi::from_path(Path::new("./examples/long_example_output.yml")).unwrap();
+    assert_eq!(transpiled, expected);
+}
+
+#[test]
+fn parses_include_file_example() {
+    use crate::openapi::included_files::resolve_included_files;
+    use pretty_assertions::assert_eq;
+
+    let path = Path::new("./examples/include_files/base.yml").to_owned();
+    let mut parsed = OpenApi::from_path(&path).unwrap();
+    //println!("{:#?}", parsed);
+    resolve_included_files(&mut parsed, &path).unwrap();
+    let transpiled = parsed.transpile(&Scope::default()).unwrap();
+    let expected =
+        OpenApi::from_path(Path::new("./examples/include_files/output.yml")).unwrap();
     assert_eq!(transpiled, expected);
 }

@@ -1,0 +1,36 @@
+# An example file which includes definitions from several external files.
+
+openapi: "3.1.0"
+info:
+  title: Example OpenAPI definition
+$includeFiles:
+  - "paths.yml"
+  - "core_components.yml"
+paths: {}
+components:
+  interfaces:
+    Widget:
+      # Include all fields from `Resource`.
+      $includes: "Resource"
+      description: |
+        A displayable widget.
+      members:
+        name:
+          required: true
+          mutable: true
+          schema:
+            type: string
+        comment:
+          mutable: true
+          schema:
+            type: string
+        readonly:
+          required: true
+          # This can't be updated once the object is created.
+          mutable: false
+          # But we do allow this to be set at creation time.
+          # If omitted, `initializable` defaults to the value
+          # of the `mutable` option.
+          initializable: true
+          schema:
+            type: string

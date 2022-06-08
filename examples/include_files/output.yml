@@ -1,0 +1,83 @@
+# AUTOMATICALLY GENERATED. DO NOT EDIT.
+---
+openapi: 3.1.0
+paths:
+  /widgets:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WidgetPost"
+        required: true
+      responses:
+        201:
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Widget"
+components:
+  schemas:
+    Uuid:
+      type: string
+      format: uuid
+    Widget:
+      type: object
+      required:
+        - id
+        - name
+        - readonly
+      properties:
+        comment:
+          type: string
+        id:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        readonly:
+          type: string
+      additionalProperties: false
+      description: "A displayable widget.\n"
+    WidgetMergePatch:
+      type: object
+      properties:
+        comment:
+          type: ~
+          oneOf:
+            - type: string
+              description: Pass this value to overwrite the existing value.
+              title: Overwrite
+            - type: "null"
+              description: "Pass `null` to clear this field's existing value."
+              title: Clear
+        name:
+          type: string
+      additionalProperties: false
+      description: "(Parameters used to PATCH the `Widget` type.)\n\nA displayable widget.\n"
+    WidgetPost:
+      type: object
+      required:
+        - name
+        - readonly
+      properties:
+        comment:
+          type: string
+        name:
+          type: string
+        readonly:
+          type: string
+      additionalProperties: false
+      description: "(Parameters used to POST a new value of the `Widget` type.)\n\nA displayable widget.\n"
+    WidgetPut:
+      type: object
+      required:
+        - name
+      properties:
+        comment:
+          type: string
+        name:
+          type: string
+      additionalProperties: false
+      description: "(Parameters used to PUT a value of the `Widget` type.)\n\nA displayable widget.\n"
+info:
+  title: Example OpenAPI definition

@@ -135,7 +135,10 @@ impl Transpile for Ref {
 
     fn transpile(&self, _scope: &Scope) -> anyhow::Result<Self::Output> {
         if !self.unknown_fields.is_empty() {
-            return Err(format_err!("`$ref:` no unknown sibling values allowed"));
+            return Err(format_err!(
+                "`$ref:` no unknown sibling values allowed in {:?}",
+                self
+            ));
         }
 
         Ok(self.clone())
@@ -171,7 +174,8 @@ impl Transpile for InterfaceRef {
         // This type is defined by us, so let's enforce this rule.
         if !self.unknown_fields.is_empty() {
             return Err(format_err!(
-                "`$interface:` no unknown sibling values allowed"
+                "`$interface:` no unknown sibling values allowed in {:?}",
+                self
             ));
         }
 
