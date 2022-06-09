@@ -303,7 +303,7 @@ pub struct OneOf {
     /// `Some(Type::Object)`, because `oneOf` with a `discriminator` only works
     /// for object types. OpenAPI 3.1 allows us to omit `type: object`, but
     /// Readme.com requires it.
-    #[serde(rename = "type", default)]
+    #[serde(rename = "type", default, skip_serializing_if = "Option::is_none")]
     pub r#type: Option<Type>,
 
     /// Our child schemas.
