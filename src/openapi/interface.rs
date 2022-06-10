@@ -641,10 +641,10 @@ impl Member {
         is_discriminator: bool,
     ) -> bool {
         match variant {
+            _ if is_discriminator => true,
             InterfaceVariant::Get => self.required,
             InterfaceVariant::Post => self.required && self.is_initializable(),
             InterfaceVariant::Put => self.required && self.mutable,
-            InterfaceVariant::MergePatch if is_discriminator => true,
             InterfaceVariant::MergePatch => false,
         }
     }
@@ -660,6 +660,7 @@ impl Member {
     ) -> Result<Option<Schema>> {
         let scope = scope.with_variant(variant);
         Ok(match variant {
+            _ if is_discriminator => Some(self.schema.transpile(&scope)?),
             InterfaceVariant::Get => Some(self.schema.transpile(&scope)?),
             InterfaceVariant::Post if self.is_initializable() => {
                 Some(self.schema.transpile(&scope)?)
@@ -669,9 +670,6 @@ impl Member {
                 Some(self.schema.transpile(&scope)?)
             }
             InterfaceVariant::Put => None,
-            InterfaceVariant::MergePatch if is_discriminator => {
-                Some(self.schema.transpile(&scope)?)
-            }
             InterfaceVariant::MergePatch if self.mutable => {
                 let schema = self.schema.transpile(&scope)?;
                 if self.required {

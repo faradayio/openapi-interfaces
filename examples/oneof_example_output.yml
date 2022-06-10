@@ -90,9 +90,13 @@ components:
       type: object
       required:
         - radius
+        - type
       properties:
         radius:
           type: number
+        type:
+          type: string
+          const: round
       additionalProperties: false
 
     SquareShapeOptions:
@@ -142,10 +146,14 @@ components:
       type: object
       required:
         - height
+        - type
         - width
       properties:
         height:
           type: number
+        type:
+          type: string
+          const: square
         width:
           type: number
       additionalProperties: false
