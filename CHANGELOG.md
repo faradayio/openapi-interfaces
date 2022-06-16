@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- `--avoid-type-null` is now deprecated, and acts as an alias for `--use_nullable_for_merge_patch`. This flag now generates complete OpenAPI 3.0-compatible MergePatch types using a clever hack based on `nullable: true` and `oneOf:`. It also now sets the file version number to `openapi: 3.0.0` when used, because 3.1 does not support `nullable: true`.
+
 ## 0.3.0 - 2022-06-13
 
 ### Added

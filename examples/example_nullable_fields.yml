@@ -1,0 +1,52 @@
+# Testing the --use-deprecated-nullable option
+
+openapi: "3.1.0"
+info:
+  title: Example OpenAPI definition
+components:
+  schemas:
+    Polygon:
+      type: object
+      properties:
+        name:
+          mutable: true
+          type: string
+        number_of_sides:
+          mutable: true
+          type: number
+
+  interfaces:
+    Resource:
+      emit: false # Do not include this in generated output.
+      members:
+        id:
+          required: true
+          schema:
+            type: string
+    Widget:
+      $includes: "Resource"
+      description: |
+        A displayable widget.
+      members:
+        # We can override properties from `Resource` using JSON
+        # Merge Patch syntax.
+        id:
+          schema:
+            example: e35a3c8d-5486-49ec-9b23-6747afc19570
+        name:
+          required: true
+          # We want to include a test for primitive types
+          mutable: true
+          schema:
+            type: string
+        comment:
+          mutable: true
+          schema:
+            type: string
+        shape:
+          # We also want to include a test for properties that are
+          # $refs. If mutable, this will be turned into a oneOf object
+          # where nullable: true.
+          mutable: true
+          schema:
+            $ref: "#/components/schemas/Polygon"

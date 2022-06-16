@@ -1,0 +1,74 @@
+# AUTOMATICALLY GENERATED. DO NOT EDIT.
+---
+openapi: 3.0.0
+paths: {}
+components:
+  schemas:
+    Polygon:
+      type: object
+      properties:
+        name:
+          type: string
+          mutable: true
+        number_of_sides:
+          type: number
+          mutable: true
+    Widget:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        comment:
+          type: string
+        id:
+          type: string
+          example: e35a3c8d-5486-49ec-9b23-6747afc19570
+        name:
+          type: string
+        shape:
+          $ref: "#/components/schemas/Polygon"
+      additionalProperties: false
+      description: "A displayable widget.\n"
+    WidgetMergePatch:
+      type: object
+      properties:
+        comment:
+          type: string
+          nullable: true
+        name:
+          type: string
+        shape:
+          oneOf:
+            - $ref: "#/components/schemas/Polygon"
+          nullable: true
+      additionalProperties: false
+      description: "(Parameters used to PATCH the `Widget` type.)\n\nA displayable widget.\n"
+    WidgetPost:
+      type: object
+      required:
+        - name
+      properties:
+        comment:
+          type: string
+        name:
+          type: string
+        shape:
+          $ref: "#/components/schemas/Polygon"
+      additionalProperties: false
+      description: "(Parameters used to POST a new value of the `Widget` type.)\n\nA displayable widget.\n"
+    WidgetPut:
+      type: object
+      required:
+        - name
+      properties:
+        comment:
+          type: string
+        name:
+          type: string
+        shape:
+          $ref: "#/components/schemas/Polygon"
+      additionalProperties: false
+      description: "(Parameters used to PUT a value of the `Widget` type.)\n\nA displayable widget.\n"
+info:
+  title: Example OpenAPI definition

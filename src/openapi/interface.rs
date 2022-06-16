@@ -454,29 +454,6 @@ impl TranspileInterface for BasicInterface {
         let mut types = BTreeSet::new();
         types.insert(Type::Object);
 
-        // Check to see whether we should just generate a placeholder.
-        if scope.use_generic_merge_patch_types
-            && variant == InterfaceVariant::MergePatch
-        {
-            let schema = PrimitiveSchema {
-                types,
-                required: vec![],
-                properties: Default::default(),
-                additional_properties: AdditionalProperties::Bool(true),
-                items: None,
-                nullable: None,
-                description: Some(format!(
-                    "A patch to `{}Put` in JSON Merge Patch format (RFC 7396).",
-                    name
-                )),
-                title: None,
-                r#const: None,
-                example: None,
-                unknown_fields: BTreeMap::default(),
-            };
-            return Ok(RefOr::Value(BasicSchema::Primitive(Box::new(schema))));
-        }
-
         // Build our properties.
         let mut required = vec![];
         let mut properties = BTreeMap::new();
@@ -562,50 +539,6 @@ impl TranspileInterface for BasicInterface {
     }
 }
 
-#[test]
-fn generates_generic_merge_patch_types_when_necessary() {
-    let mut members = BTreeMap::new();
-    members.insert(
-        "field".to_owned(),
-        Member {
-            required: false,
-            mutable: true,
-            initializable: None,
-            // Literally any schema would work here.
-            schema: Schema::new_schema_matching_only_null_for_merge_patch(),
-        },
-    );
-    let iface = BasicInterface {
-        emit: true,
-        members,
-        additional_members: None,
-        discriminator_member_name: None,
-        description: None,
-        title: None,
-        example: None,
-    };
-
-    let scope = Scope {
-        use_generic_merge_patch_types: true,
-        ..Scope::default()
-    };
-    let generated = iface
-        .generate_schema_variant(
-            &scope,
-            &BTreeMap::default(),
-            "Example",
-            InterfaceVariant::MergePatch,
-        )
-        .unwrap();
-
-    let expected_yaml = r#"
-type: object
-description: A patch to `ExamplePut` in JSON Merge Patch format (RFC 7396).
-"#;
-    let expected = serde_yaml::from_str(expected_yaml).unwrap();
-    assert_eq!(generated, expected);
-}
-
 /// A member of an interface. Analogous to a property, but with more metadata
 /// and a few restrictions.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -680,7 +613,11 @@ impl Member {
                     Some(schema)
                 } else {
                     // Optional fields become nullable.
-                    Some(schema.new_schema_matching_current_or_null_for_merge_patch())
+                    Some(
+                        schema.new_schema_matching_current_or_null_for_merge_patch(
+                            &scope,
+                        ),
+                    )
                 }
             }
             InterfaceVariant::MergePatch => None,
@@ -802,6 +739,7 @@ impl TranspileInterface for OneOfInterface {
             description: self.description.clone(),
             title: self.title.clone(),
             discriminator: Some(discriminator),
+            nullable: None,
             unknown_fields: Default::default(),
         })))
     }
