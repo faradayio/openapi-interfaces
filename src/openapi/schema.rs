@@ -29,7 +29,10 @@ pub trait Nullable: Sized {
 
     /// Construct a version of this schema that allows `null`, as well as any
     /// other values it might have allowed before.
-    fn new_schema_matching_current_or_null_for_merge_patch(&self) -> Self;
+    fn new_schema_matching_current_or_null_for_merge_patch(
+        &self,
+        scope: &Scope,
+    ) -> Self;
 
     /// (Normally internal.) Does this schema allow a null value without
     /// resolving `$ref` or `$interface` links?
@@ -57,14 +60,24 @@ impl Nullable for Schema {
         RefOr::Value(BasicSchema::new_schema_matching_only_null_for_merge_patch())
     }
 
-    fn new_schema_matching_current_or_null_for_merge_patch(&self) -> Schema {
+    fn new_schema_matching_current_or_null_for_merge_patch(
+        &self,
+        scope: &Scope,
+    ) -> Schema {
         match self {
+            RefOr::Ref(_) | RefOr::InterfaceRef(_)
+                if scope.use_nullable_for_merge_patch =>
+            {
+                RefOr::Value(BasicSchema::OneOf(
+                    OneOf::new_nullable_schema_for_merge_patch(self),
+                ))
+            }
             RefOr::Ref(_) | RefOr::InterfaceRef(_) => RefOr::Value(
                 BasicSchema::OneOf(OneOf::new_schema_or_null_for_merge_patch(self)),
             ),
-            RefOr::Value(val) => {
-                RefOr::Value(val.new_schema_matching_current_or_null_for_merge_patch())
-            }
+            RefOr::Value(val) => RefOr::Value(
+                val.new_schema_matching_current_or_null_for_merge_patch(scope),
+            ),
         }
     }
 
@@ -93,8 +106,9 @@ fn allowing_null_turns_refs_into_oneof() {
 
     let schema =
         RefOr::<BasicSchema>::Ref(Ref::new("#/components/schemas/widget", None));
+    let scope = Scope::default();
     assert_eq!(
-        schema.new_schema_matching_current_or_null_for_merge_patch(),
+        schema.new_schema_matching_current_or_null_for_merge_patch(&scope),
         RefOr::Value(BasicSchema::OneOf(OneOf {
             r#type: None,
             schemas: vec![
@@ -104,6 +118,7 @@ fn allowing_null_turns_refs_into_oneof() {
             description: None,
             title: None,
             discriminator: None,
+            nullable: None,
             unknown_fields: Default::default(),
         }))
     )
@@ -221,36 +236,64 @@ impl Nullable for BasicSchema {
         }
     }
 
-    fn new_schema_matching_current_or_null_for_merge_patch(&self) -> BasicSchema {
-        match self {
-            // We already allow `null` (without following refs), so do nothing.
-            schema if schema.allows_local_null() => schema.to_owned(),
+    fn new_schema_matching_current_or_null_for_merge_patch(
+        &self,
+        scope: &Scope,
+    ) -> BasicSchema {
+        if scope.use_nullable_for_merge_patch {
+            match self {
+                // We have a type that supports `nullable`, so do that.
+                BasicSchema::Primitive(base) => {
+                    let mut base = base.clone();
+                    base.nullable = Some(true);
+                    BasicSchema::Primitive(base)
+                }
 
-            // We have a `BaseSchema`, so we can just add `null` to our existing
-            // `type` list.
-            //
-            // However, `openapi-typescript` (which we care about) does not
-            // currently support a list for `types`, so we're careful not to
-            // introduce an extra element if we have exactly one.
-            BasicSchema::Primitive(base) if base.types.len() != 1 => {
-                let mut base = base.as_ref().to_owned();
-                base.types.insert(Type::Null);
-                BasicSchema::Primitive(Box::new(base))
+                // We already have a `oneOf`, which also supports nullable.
+                BasicSchema::OneOf(one_of) => {
+                    let mut base = one_of.clone();
+                    base.nullable = Some(true);
+                    BasicSchema::OneOf(base)
+                }
+
+                // We already have an `allOf`, which also supports nullable.
+                BasicSchema::AllOf(all_of) => {
+                    let mut base = all_of.clone();
+                    base.nullable = Some(true);
+                    BasicSchema::AllOf(base)
+                }
             }
+        } else {
+            match self {
+                // We already allow `null` (without following refs), so do nothing.
+                schema if schema.allows_local_null() => schema.to_owned(),
 
-            // We have a `OneOf` schema, so just add `null` **at the end**.
-            BasicSchema::OneOf(one_of) => {
-                let mut one_of = one_of.to_owned();
-                one_of
-                    .schemas
-                    .push(Schema::new_schema_matching_only_null_for_merge_patch());
-                BasicSchema::OneOf(one_of)
+                // We have a `BaseSchema`, so we can just add `null` to our existing
+                // `type` list.
+                //
+                // However, `openapi-typescript` (which we care about) does not
+                // currently support a list for `types`, so we're careful not to
+                // introduce an extra element if we have exactly one.
+                BasicSchema::Primitive(base) if base.types.len() != 1 => {
+                    let mut base = base.as_ref().to_owned();
+                    base.types.insert(Type::Null);
+                    BasicSchema::Primitive(Box::new(base))
+                }
+
+                // We have a `OneOf` schema, so just add `null` **at the end**.
+                BasicSchema::OneOf(one_of) => {
+                    let mut one_of = one_of.to_owned();
+                    one_of
+                        .schemas
+                        .push(Schema::new_schema_matching_only_null_for_merge_patch());
+                    BasicSchema::OneOf(one_of)
+                }
+
+                // We have some other schema type, so we'll need to create a `OneOf` node.
+                _ => BasicSchema::OneOf(OneOf::new_schema_or_null_for_merge_patch(
+                    &RefOr::Value(self.to_owned()),
+                )),
             }
-
-            // We have some other schema type, so we'll need to create a `OneOf` node.
-            _ => BasicSchema::OneOf(OneOf::new_schema_or_null_for_merge_patch(
-                &RefOr::Value(self.to_owned()),
-            )),
         }
     }
 }
@@ -280,6 +323,10 @@ pub struct AllOf {
     #[serde(rename = "allOf")]
     schemas: Vec<Schema>,
 
+    /// Is this field nullable? Used for the OpenAPI 3.0.X spec.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nullable: Option<bool>,
+
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
@@ -291,6 +338,7 @@ impl Transpile for AllOf {
     fn transpile(&self, scope: &Scope) -> anyhow::Result<Self::Output> {
         Ok(Self {
             schemas: self.schemas.transpile(scope)?,
+            nullable: self.nullable,
             unknown_fields: self.unknown_fields.clone(),
         })
     }
@@ -324,6 +372,10 @@ pub struct OneOf {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub discriminator: Option<Discriminator>,
 
+    /// Is this field nullable? Used for the OpenAPI 3.0.X spec.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nullable: Option<bool>,
+
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
@@ -345,6 +397,23 @@ impl OneOf {
             description,
             title: None,
             discriminator: None,
+            nullable: None,
+            unknown_fields: Default::default(),
+        }
+    }
+
+    /// Create a `oneOf` schema with the provided schema, setting the nullable field on the
+    /// returned `oneOf`.
+    fn new_nullable_schema_for_merge_patch(schema: &Schema) -> OneOf {
+        let (schema, description) = schema.new_schema_with_merge_patch_documentation();
+        let schemas = vec![schema];
+        OneOf {
+            r#type: None,
+            schemas,
+            description,
+            title: None,
+            discriminator: None,
+            nullable: Some(true),
             unknown_fields: Default::default(),
         }
     }
@@ -360,6 +429,7 @@ impl Transpile for OneOf {
             description: self.description.clone(),
             title: self.title.clone(),
             discriminator: self.discriminator.clone(),
+            nullable: self.nullable,
             unknown_fields: self.unknown_fields.clone(),
         })
     }

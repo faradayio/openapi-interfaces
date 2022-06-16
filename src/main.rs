@@ -28,13 +28,10 @@ struct Opt {
     #[structopt(short = "o", long = "out-file")]
     output: Option<PathBuf>,
 
-    /// Do not introduce `type: "null"` in the output. This is automatic for
-    /// OpenAPI 3.0. This option will result in generic `MergePatch` types.
-    ///
-    /// Useful for compatibility with readme.com and other OpenAPI 3.0-only
-    /// tools.
-    #[structopt(long = "avoid-type-null")]
-    avoid_type_null: bool,
+    /// Do not introduce `type: "null"` in the output. Instead, use `nullable:
+    /// true` and set `openapi: "3.0.0"` in the output.
+    #[structopt(long = "use-nullable-for-merge-patch", alias = "avoid-type-null")]
+    use_nullable_for_merge_patch: bool,
 }
 
 /// Main entry point. Really just a wrapper for `run` which sets up logging and
@@ -59,9 +56,9 @@ fn main() {
 fn run(opt: &Opt) -> Result<()> {
     let mut openapi = OpenApi::from_path(&opt.input)?;
     let mut scope = Scope::default();
-    if !openapi.supports_type_null() || opt.avoid_type_null {
+    if !openapi.supports_type_null() || opt.use_nullable_for_merge_patch {
         // We don't support `type: "null"`, so don't introduce it.
-        scope.use_generic_merge_patch_types = true;
+        scope.use_nullable_for_merge_patch = true;
     }
     trace!("Parsed: {:#?}", openapi);
     resolve_included_files(&mut openapi, &opt.input)?;

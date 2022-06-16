@@ -112,8 +112,16 @@ impl Transpile for OpenApi {
     type Output = Self;
 
     fn transpile(&self, scope: &Scope) -> Result<Self> {
+        let openapi =
+            if scope.use_nullable_for_merge_patch && self.supports_type_null() {
+                // Always force version 3.0 if we were asked to use `nullable`
+                // but our existing version supports `type: null` instead.
+                Version::new(3, 0, 0)
+            } else {
+                self.openapi.clone()
+            };
         Ok(Self {
-            openapi: self.openapi.clone(),
+            openapi,
             include_files: Default::default(),
             paths: self.paths.transpile(scope)?,
             components: self.components.transpile(scope)?,
@@ -357,5 +365,23 @@ fn parses_include_file_example() {
     let transpiled = parsed.transpile(&Scope::default()).unwrap();
     let expected =
         OpenApi::from_path(Path::new("./examples/include_files/output.yml")).unwrap();
+    assert_eq!(transpiled, expected);
+}
+
+#[test]
+fn parses_nullable_example() {
+    use pretty_assertions::assert_eq;
+
+    let path = Path::new("./examples/example_nullable_fields.yml").to_owned();
+    let parsed = OpenApi::from_path(&path).unwrap();
+    //println!("{:#?}", parsed);
+    let scope = Scope {
+        use_nullable_for_merge_patch: true,
+        ..Scope::default()
+    };
+    let transpiled = parsed.transpile(&scope).unwrap();
+    let expected =
+        OpenApi::from_path(Path::new("./examples/example_nullable_fields_output.yml"))
+            .unwrap();
     assert_eq!(transpiled, expected);
 }
