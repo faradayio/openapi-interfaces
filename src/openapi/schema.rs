@@ -472,6 +472,10 @@ pub struct PrimitiveSchema {
     #[serde(default, skip_serializing_if = "AdditionalProperties::is_default")]
     pub additional_properties: AdditionalProperties,
 
+    /// A schema describing naming restrictions for `additional_properties`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub property_names: Option<Value>,
+
     /// Array item type.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub items: Option<Schema>,
@@ -524,6 +528,7 @@ impl PrimitiveSchema {
             required: Default::default(),
             properties: Default::default(),
             additional_properties: Default::default(),
+            property_names: Default::default(),
             items: Default::default(),
             nullable: None,
             description: Default::default(),
@@ -578,6 +583,7 @@ impl Transpile for PrimitiveSchema {
             required: self.required.clone(),
             properties: self.properties.transpile(scope)?,
             additional_properties: self.additional_properties.transpile(scope)?,
+            property_names: self.property_names.clone(),
             items: self.items.transpile(scope)?,
             nullable: None,
             description: self.description.clone(),

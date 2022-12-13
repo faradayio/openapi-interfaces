@@ -379,6 +379,11 @@ pub struct BasicInterface {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     additional_members: Option<Member>,
 
+    /// Analogous to `propertyNames` in JSON Schema.
+    /// This allows us to validate the keys for additionalMembers
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    member_names: Option<Value>,
+
     /// Which member of this interface, if any, will be used as a discriminator
     /// when we combine it into a one-of interface?
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -510,6 +515,8 @@ impl TranspileInterface for BasicInterface {
             ),
         });
 
+        let property_names: Option<Value> = self.member_names.clone();
+
         // TODO: Always copy the title verbatim, though we may change this later.
         let title = self.title.clone();
 
@@ -527,6 +534,7 @@ impl TranspileInterface for BasicInterface {
             required,
             properties,
             additional_properties,
+            property_names,
             items: None,
             nullable: None,
             description,
