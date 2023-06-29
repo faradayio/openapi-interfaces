@@ -1,0 +1,91 @@
+# AUTOMATICALLY GENERATED. DO NOT EDIT.
+---
+paths: {}
+components:
+  schemas:
+    ShapesOptions:
+      type: object
+      mutable: true
+      additionalProperties:
+        oneOf:
+          - $ref: "#/components/schemas/SquareShapeOptions"
+          - $ref: "#/components/schemas/ImmutableSquareShapeOptions"
+
+    # Notice for each of the Patch, Post and Put schemas ImmutableSquareShapeOptions
+    # does not appear because it provide no mutable properties.
+    ShapesOptionsMergePatch:
+      type: object
+      additionalProperties:
+        oneOf:
+          - $ref: "#/components/schemas/SquareShapeOptionsMergePatch"
+          - type: "null"
+            description: "Pass `null` to clear this field's existing value."
+            title: Clear
+
+    ShapesOptionsPost:
+      type: object
+      additionalProperties:
+        oneOf:
+          - $ref: "#/components/schemas/SquareShapeOptionsPost"
+
+    ShapesOptionsPut:
+      type: object
+      additionalProperties:
+        oneOf:
+          - $ref: "#/components/schemas/SquareShapeOptionsPut"
+
+    ImmutableSquareShapeOptions:
+      type: object
+      required:
+        - internal_only
+      properties:
+        internal_only:
+          type: boolean
+          const: true
+      additionalProperties: false
+
+    SquareShapeOptions:
+      type: object
+      required:
+        - height
+        - width
+      properties:
+        height:
+          type: number
+        width:
+          type: number
+      additionalProperties: false
+    SquareShapeOptionsMergePatch:
+      type: object
+      properties:
+        height:
+          type: number
+        width:
+          type: number
+      additionalProperties: false
+    SquareShapeOptionsPost:
+      type: object
+      required:
+        - height
+        - width
+      properties:
+        height:
+          type: number
+        width:
+          type: number
+      additionalProperties: false
+    SquareShapeOptionsPut:
+      type: object
+      required:
+        - height
+        - width
+      properties:
+        height:
+          type: number
+        width:
+          type: number
+      additionalProperties: false
+
+info:
+  title: Example OpenAPI definition
+openapi: 3.1.0

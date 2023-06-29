@@ -760,3 +760,21 @@ fn parses_one_of_example() {
         OpenApi::from_path(Path::new("./examples/oneof_example_output.yml")).unwrap();
     assert_eq!(transpiled, expected);
 }
+
+#[test]
+fn parses_one_of_with_nonmutable_example() {
+    use crate::openapi::OpenApi;
+    use pretty_assertions::assert_eq;
+    use std::path::Path;
+
+    let path = Path::new("./examples/oneof_with_nonmutable_example.yml").to_owned();
+    let parsed = OpenApi::from_path(&path).unwrap();
+    //println!("{:#?}", parsed);
+    let transpiled = parsed.transpile(&Scope::default()).unwrap();
+    println!("{}", serde_yaml::to_string(&transpiled).unwrap());
+    let expected = OpenApi::from_path(Path::new(
+        "./examples/oneof_with_nonmutable_example_output.yml",
+    ))
+    .unwrap();
+    assert_eq!(transpiled, expected);
+}

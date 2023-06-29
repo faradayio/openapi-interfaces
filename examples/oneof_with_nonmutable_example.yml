@@ -1,0 +1,38 @@
+# How to use `oneOf` with interfaces to define discriminated type unions.
+
+openapi: "3.1.0"
+info:
+  title: Example OpenAPI definition
+paths: {}
+components:
+  interfaces:
+    
+    ShapesOptions:
+      additionalMembers:
+        mutable: true
+        schema:
+          oneOf:
+            - $interface: "SquareShapeOptions#SameAsInterface"
+            - $interface: "ImmutableSquareShapeOptions#SameAsInterface"
+
+    SquareShapeOptions:
+      members:
+        height:
+          required: true
+          mutable: true
+          schema:
+            type: number
+        width:
+          required: true
+          mutable: true
+          schema:
+            type: number
+
+    ImmutableSquareShapeOptions:
+      members:
+        internal_only:
+          required: true
+          mutable: false 
+          schema:
+            type: boolean
+            const: true
