@@ -6,6 +6,21 @@ use anyhow::Result;
 
 use super::interface::InterfaceVariant;
 
+/// Audience filtering mode.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AudienceFilterMode {
+    /// Include only items with matching audiences.
+    Include,
+    /// Exclude items with matching audiences.
+    Exclude,
+}
+
+impl Default for AudienceFilterMode {
+    fn default() -> Self {
+        AudienceFilterMode::Include
+    }
+}
+
 /// Current transpilation scope. Contains state that applies to everything
 /// within a block, recursively. Think of this in terms of "local variable
 /// scope" in a compiler for a regular programming language.
@@ -17,6 +32,12 @@ pub struct Scope {
 
     /// The `InterfaceVariant` of the containing interface.
     pub variant: Option<InterfaceVariant>,
+
+    /// Audiences to filter by.
+    pub filter_audiences: Option<Vec<String>>,
+
+    /// How to filter audiences.
+    pub audience_filter_mode: AudienceFilterMode,
 }
 
 impl Scope {
@@ -26,6 +47,35 @@ impl Scope {
         Self {
             use_nullable_for_merge_patch: self.use_nullable_for_merge_patch,
             variant: Some(variant),
+            filter_audiences: self.filter_audiences.clone(),
+            audience_filter_mode: self.audience_filter_mode.clone(),
+        }
+    }
+
+    /// Check if an item should be included based on its audiences.
+    /// Returns true if the item should be included, false if it should be filtered out.
+    pub fn should_include_item(&self, item_audiences: &Option<Vec<String>>) -> bool {
+        // If no filter is configured, include everything
+        let Some(ref filter_audiences) = self.filter_audiences else {
+            return true;
+        };
+
+        // If item has no audiences, it's considered public/default
+        let Some(ref audiences) = item_audiences else {
+            // Items without audiences are always included
+            // - In include mode: they're public/default, so include them
+            // - In exclude mode: they don't have the excluded audience, so include them
+            return true;
+        };
+
+        // Check if there's any overlap between filter audiences and item audiences
+        let has_match = audiences
+            .iter()
+            .any(|aud| filter_audiences.contains(aud));
+
+        match self.audience_filter_mode {
+            AudienceFilterMode::Include => has_match,
+            AudienceFilterMode::Exclude => !has_match,
         }
     }
 }
@@ -36,6 +86,8 @@ impl Default for Scope {
         Self {
             use_nullable_for_merge_patch: false,
             variant: None,
+            filter_audiences: None,
+            audience_filter_mode: AudienceFilterMode::default(),
         }
     }
 }

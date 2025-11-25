@@ -25,6 +25,10 @@ We will provide binaries at some point.
 ```sh
 openapi-interfaces --help
 openapi-interfaces api_with_interfaces.yml -o api.yml
+
+# Filter by audience
+openapi-interfaces api_with_interfaces.yml -o api.yml --audience beta
+openapi-interfaces api_with_interfaces.yml -o api.yml --audience beta --audience-mode exclude
 ```
 
 ## OpenAPI extensions
@@ -121,3 +125,49 @@ Possible options are:
 - `Widget#Put`: The type passed to a `PUT` request. May also be used as the base type for applying `#MergePatch` values.
 - `Widget#MergePatch`: A [JSON Merge Patch](https://datatracker.ietf.org/doc/html/rfc7396) schema that can be passed to `PATCH`.
 - `Widget#SameAsInterface`: **May only be used inside `components.interfaces`.** This is a shortcut value that says "When generating a `#Get` interface, include `$ref: "components.schemas.Widget`. When generating a `#Post` interface, include `$ref: "components.schemas.WidgetPost`." In other words, use the same variant selector as the containing interface. Useful for when compound types are sent over the wire.
+
+### Audience Filtering
+
+This tool supports the `x-openapi-interfaces-audience` extension to filter API definitions for different audiences (e.g., public, beta, internal). You can apply audiences to:
+
+- **Operations/Endpoints**: Tag entire endpoints with specific audiences
+- **Schema Properties**: Tag individual fields within interface members
+
+Items without an audience tag are considered public and are included in all filtered outputs.
+
+Example:
+
+```yaml
+paths:
+  /beta-endpoint:
+    get:
+      x-openapi-interfaces-audience: ["beta"]
+      responses:
+        200:
+          description: Beta endpoint
+
+components:
+  interfaces:
+    Widget:
+      members:
+        publicField:
+          schema:
+            type: string
+        betaField:
+          schema:
+            type: string
+            x-openapi-interfaces-audience: ["beta"]
+```
+
+Use the `--audience` flag to filter the output:
+
+```sh
+# Include only beta and public items
+openapi-interfaces api.yml -o api_beta.yml --audience beta
+
+# Exclude beta items (show only public and other audiences)
+openapi-interfaces api.yml -o api_public.yml --audience beta --audience-mode exclude
+
+# Include multiple audiences
+openapi-interfaces api.yml -o api.yml --audience beta --audience internal
+```

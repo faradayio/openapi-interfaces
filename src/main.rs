@@ -32,6 +32,16 @@ struct Opt {
     /// true` and set `openapi: "3.0.0"` in the output.
     #[structopt(long = "use-nullable-for-merge-patch", alias = "avoid-type-null")]
     use_nullable_for_merge_patch: bool,
+
+    /// Filter by audience(s). Can be specified multiple times.
+    #[structopt(long = "audience")]
+    audiences: Vec<String>,
+
+    /// How to filter audiences: "include" or "exclude".
+    /// "include" means only items with matching audiences are included.
+    /// "exclude" means items with matching audiences are excluded.
+    #[structopt(long = "audience-mode", default_value = "include")]
+    audience_mode: String,
 }
 
 /// Main entry point. Really just a wrapper for `run` which sets up logging and
@@ -54,12 +64,31 @@ fn main() {
 
 /// Our real entry point.
 fn run(opt: &Opt) -> Result<()> {
+    // Validate audience_mode
+    if opt.audience_mode != "include" && opt.audience_mode != "exclude" {
+        return Err(anyhow::format_err!(
+            "audience-mode must be either 'include' or 'exclude', got '{}'",
+            opt.audience_mode
+        ));
+    }
+
     let mut openapi = OpenApi::from_path(&opt.input)?;
     let mut scope = Scope::default();
     if !openapi.supports_type_null() || opt.use_nullable_for_merge_patch {
         // We don't support `type: "null"`, so don't introduce it.
         scope.use_nullable_for_merge_patch = true;
     }
+
+    // Set audience filtering configuration
+    if !opt.audiences.is_empty() {
+        scope.filter_audiences = Some(opt.audiences.clone());
+        scope.audience_filter_mode = if opt.audience_mode == "include" {
+            openapi::AudienceFilterMode::Include
+        } else {
+            openapi::AudienceFilterMode::Exclude
+        };
+    }
+
     trace!("Parsed: {:#?}", openapi);
     resolve_included_files(&mut openapi, &opt.input)?;
     trace!("With includes: {:#?}", openapi);

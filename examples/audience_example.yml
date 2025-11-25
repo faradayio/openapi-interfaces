@@ -1,0 +1,103 @@
+# Example demonstrating x-openapi-interfaces-audience extension
+
+openapi: "3.1.0"
+info:
+  title: Example API with Audiences
+  version: "1.0.0"
+
+paths:
+  /public-endpoint:
+    get:
+      summary: Public endpoint available to everyone
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $interface: "PublicWidget"
+
+  /beta-endpoint:
+    get:
+      summary: Beta endpoint only for beta users
+      x-openapi-interfaces-audience: ["beta"]
+      responses:
+        200:
+          description: Success
+          content:
+            application/json:
+              schema:
+                $interface: "BetaWidget"
+
+  /internal-endpoint:
+    post:
+      summary: Internal endpoint for internal use only
+      x-openapi-interfaces-audience: ["internal"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $interface: "InternalWidget#Post"
+      responses:
+        201:
+          description: Created
+          content:
+            application/json:
+              schema:
+                $interface: "InternalWidget"
+
+components:
+  interfaces:
+    PublicWidget:
+      description: Widget with public and beta fields
+      members:
+        id:
+          required: true
+          schema:
+            type: string
+            format: uuid
+        name:
+          required: true
+          mutable: true
+          schema:
+            type: string
+        publicField:
+          required: true
+          schema:
+            type: string
+        betaField:
+          mutable: true
+          schema:
+            type: string
+            x-openapi-interfaces-audience: ["beta"]
+        internalField:
+          mutable: true
+          schema:
+            type: string
+            x-openapi-interfaces-audience: ["internal"]
+
+    BetaWidget:
+      description: Widget for beta users
+      members:
+        id:
+          required: true
+          schema:
+            type: string
+        betaOnlyField:
+          required: true
+          schema:
+            type: string
+
+    InternalWidget:
+      description: Widget for internal use
+      members:
+        id:
+          required: true
+          schema:
+            type: string
+        internalData:
+          required: true
+          mutable: true
+          schema:
+            type: object

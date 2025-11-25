@@ -29,7 +29,7 @@ use crate::parse_error::{Annotation, FileInfo, ParseError};
 use self::interface::Interfaces;
 use self::ref_or::{ExpectedWhenParsing, RefOr};
 use self::schema::Schema;
-pub use self::transpile::{Scope, Transpile};
+pub use self::transpile::{AudienceFilterMode, Scope, Transpile};
 
 /// An OpenAPI file, with our extensions.
 #[serde_as]
@@ -120,10 +120,27 @@ impl Transpile for OpenApi {
             } else {
                 self.openapi.clone()
             };
+
+        // Transpile paths with audience filtering
+        let mut paths = BTreeMap::new();
+        for (path, methods) in &self.paths {
+            let mut filtered_methods = BTreeMap::new();
+            for (method, operation) in methods {
+                // Filter operations based on audience
+                if scope.should_include_item(&operation.audience) {
+                    filtered_methods.insert(*method, operation.transpile(scope)?);
+                }
+            }
+            // Only include the path if it has at least one method
+            if !filtered_methods.is_empty() {
+                paths.insert(path.clone(), filtered_methods);
+            }
+        }
+
         Ok(Self {
             openapi,
             include_files: Default::default(),
-            paths: self.paths.transpile(scope)?,
+            paths,
             components: self.components.transpile(scope)?,
             unknown_fields: self.unknown_fields.clone(),
         })
@@ -209,6 +226,13 @@ struct Operation {
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     responses: BTreeMap<u16, RefOr<ResponseBody>>,
 
+    /// Audiences this operation is intended for.
+    #[serde(
+        rename = "x-openapi-interfaces-audience",
+        skip_serializing_if = "Option::is_none"
+    )]
+    audience: Option<Vec<String>>,
+
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
     unknown_fields: BTreeMap<String, Value>,
@@ -221,6 +245,7 @@ impl Transpile for Operation {
         Ok(Self {
             request_body: self.request_body.transpile(scope)?,
             responses: self.responses.transpile(scope)?,
+            audience: self.audience.clone(),
             unknown_fields: self.unknown_fields.clone(),
         })
     }

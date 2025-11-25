@@ -458,6 +458,11 @@ impl TranspileInterface for BasicInterface {
         let mut required = vec![];
         let mut properties = BTreeMap::new();
         for (name, member) in &self.members {
+            // Filter members based on audience
+            if !scope.should_include_item(&member.get_audience()) {
+                continue;
+            }
+
             let is_discriminator =
                 Some(name) == self.discriminator_member_name.as_ref();
             if let Some(schema) =
@@ -533,6 +538,7 @@ impl TranspileInterface for BasicInterface {
             title,
             r#const: None,
             example,
+            audience: None,
             unknown_fields: BTreeMap::default(),
         };
         Ok(RefOr::Value(BasicSchema::Primitive(Box::new(schema))))
@@ -565,6 +571,14 @@ impl Member {
     /// Is this member settable at initialization time?
     fn is_initializable(&self) -> bool {
         self.initializable.unwrap_or(self.mutable)
+    }
+
+    /// Get the audience from this member's schema, if any.
+    fn get_audience(&self) -> Option<Vec<String>> {
+        match &self.schema {
+            RefOr::Value(BasicSchema::Primitive(prim)) => prim.audience.clone(),
+            _ => None,
+        }
     }
 
     /// Should this member be marked as `required` in this variant?

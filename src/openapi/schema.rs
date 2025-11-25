@@ -501,6 +501,14 @@ pub struct PrimitiveSchema {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub example: Option<Value>,
 
+    /// Audiences this schema is intended for.
+    #[serde(
+        rename = "x-openapi-interfaces-audience",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub audience: Option<Vec<String>>,
+
     /// YAML fields we want to pass through blindly.
     #[serde(flatten)]
     pub unknown_fields: BTreeMap<String, Value>,
@@ -530,6 +538,7 @@ impl PrimitiveSchema {
             title: Default::default(),
             r#const: Default::default(),
             example: Default::default(),
+            audience: Default::default(),
             unknown_fields: Default::default(),
         }
     }
@@ -573,10 +582,35 @@ impl Transpile for PrimitiveSchema {
             types.insert(Type::Null);
         }
 
+        // Filter properties based on audience
+        let mut properties = BTreeMap::new();
+        for (name, schema) in &self.properties {
+            // Check if this property should be included based on its audience
+            // We need to check BEFORE transpilation to get the original audience
+            let should_include = match schema {
+                RefOr::Value(BasicSchema::Primitive(prim)) => {
+                    scope.should_include_item(&prim.audience)
+                }
+                _ => true, // Include refs and non-primitive schemas by default
+            };
+            if should_include {
+                let transpiled = schema.transpile(scope)?;
+                properties.insert(name.clone(), transpiled);
+            }
+        }
+
+        // Filter required fields to only include properties that are still present
+        let required: Vec<String> = self
+            .required
+            .iter()
+            .filter(|name| properties.contains_key(*name))
+            .cloned()
+            .collect();
+
         Ok(Self {
             types,
-            required: self.required.clone(),
-            properties: self.properties.transpile(scope)?,
+            required,
+            properties,
             additional_properties: self.additional_properties.transpile(scope)?,
             items: self.items.transpile(scope)?,
             nullable: None,
@@ -584,6 +618,7 @@ impl Transpile for PrimitiveSchema {
             title: self.title.clone(),
             r#const: self.r#const.clone(),
             example: self.example.clone(),
+            audience: self.audience.clone(),
             unknown_fields: self.unknown_fields.clone(),
         })
     }
