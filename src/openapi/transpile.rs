@@ -69,9 +69,7 @@ impl Scope {
         };
 
         // Check if there's any overlap between filter audiences and item audiences
-        let has_match = audiences
-            .iter()
-            .any(|aud| filter_audiences.contains(aud));
+        let has_match = audiences.iter().any(|aud| filter_audiences.contains(aud));
 
         match self.audience_filter_mode {
             AudienceFilterMode::Include => has_match,
