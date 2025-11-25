@@ -179,17 +179,17 @@ impl<'de> Deserialize<'de> for BasicSchema {
         let yaml_str = |s| Value::String(String::from(s));
 
         // Look for `$includes`.
-        if yaml.contains_key(&yaml_str("allOf")) {
+        if yaml.contains_key(yaml_str("allOf")) {
             Ok(BasicSchema::AllOf(deserialize_enum_helper::<D, _>(
                 "allOf schema",
                 Value::Mapping(yaml),
             )?))
-        } else if yaml.contains_key(&yaml_str("oneOf")) {
+        } else if yaml.contains_key(yaml_str("oneOf")) {
             Ok(BasicSchema::OneOf(deserialize_enum_helper::<D, _>(
                 "oneOf schema",
                 Value::Mapping(yaml),
             )?))
-        } else if yaml.contains_key(&yaml_str("type")) {
+        } else if yaml.contains_key(yaml_str("type")) {
             Ok(BasicSchema::Primitive(deserialize_enum_helper::<D, _>(
                 "schema",
                 Value::Mapping(yaml),

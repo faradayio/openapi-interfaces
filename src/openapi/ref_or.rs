@@ -62,12 +62,12 @@ where
         let yaml_str = |s| Value::String(String::from(s));
 
         // Look for `$includes` or `$ref`, otherwise fall back.
-        if yaml.contains_key(&yaml_str("$ref")) {
+        if yaml.contains_key(yaml_str("$ref")) {
             Ok(RefOr::Ref(deserialize_enum_helper::<D, _>(
                 "$ref schema",
                 Value::Mapping(yaml),
             )?))
-        } else if yaml.contains_key(&yaml_str("$interface")) {
+        } else if yaml.contains_key(yaml_str("$interface")) {
             Ok(RefOr::InterfaceRef(deserialize_enum_helper::<D, _>(
                 "$interface schema",
                 Value::Mapping(yaml),

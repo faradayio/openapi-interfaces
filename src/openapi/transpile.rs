@@ -7,18 +7,13 @@ use anyhow::Result;
 use super::interface::InterfaceVariant;
 
 /// Audience filtering mode.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub enum AudienceFilterMode {
     /// Include only items with matching audiences.
+    #[default]
     Include,
     /// Exclude items with matching audiences.
     Exclude,
-}
-
-impl Default for AudienceFilterMode {
-    fn default() -> Self {
-        AudienceFilterMode::Include
-    }
 }
 
 /// Current transpilation scope. Contains state that applies to everything
